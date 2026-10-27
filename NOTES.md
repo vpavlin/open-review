@@ -89,3 +89,30 @@ A running log: newest last. What was done, why, and what was found.
 - So: both controls graded right (known-bad critical, known-good clean), and the reviewer is appropriately skeptical of weak evidence.
 - **Gap to close:** make Basecamp actually run a QML module in the sandbox (software GL: LIBGL_ALWAYS_SOFTWARE/mesa llvmpipe, or a virtual GPU), so QML-only modules get real dynamic coverage. Build+install code is already covered.
 - PoC status: **working end to end** on both controls, published and served, live view during the run.
+
+## 2026-10-27: the reviewer moves into the sandbox; forumer again
+
+- Václav, on the first forumer report (6 findings, 57 lines): the auditor's
+  reports are far more detailed and useful; "use the sandbox properly… a
+  real-world review of the code and of the running things." Also: add usage
+  stats; the screenshot was empty and the video didn't play.
+- **Re-architected:** pi now runs *inside* the disguised sandbox
+  (`review-in-sandbox.sh`, started by `reviewer.sh`), so it can build, run and
+  attack the module itself. The Venice key stays on the host in `gateway.py`,
+  which now demands a per-run random bearer token and is reached at
+  `host.containers.internal`. The prompt follows the auditor's method and
+  report shape (Bottom line / What I ran / FR-N with Exploit+Fix / What is
+  solid / Not tested / Suggested order). `render.py` adds usage stats from
+  `gateway.jsonl` and drops blank media with a note.
+- **Image:** rebased on ubuntu:24.04, since Basecamp's AppImage needs glibc
+  2.38+ and bookworm has 2.36. Mesa llvmpipe software GL renders (OpenGL 4.5
+  under Xvfb). `libasound2` is `libasound2t64` there. cmake and ninja were
+  missing, so forumer's C++ couldn't be built; added.
+- **Gotcha:** `sudo -u reviewer -H podman …` sees a different (empty) podman
+  store; use `sudo -iu reviewer`.
+- **forumer run 2:** the reviewer compiled probes against forumer_core and ran
+  them: wire/seal/base64/alias validation, then an ASan+UBSan fuzz probe into
+  fromJson, sync::decode, openWire, sealed::open, vault::open. Slow: each probe
+  recompiled the whole core with sanitizers on one core (~2.5 min per attempt,
+  ~1 model call per 9 min). Prompt now says build the library once with all
+  cores and link probes to it (63cc8ed).
