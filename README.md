@@ -11,3 +11,12 @@ agent's session log and every model request).
   rebuilt from these.
 
 Status: proof of concept, one reviewer, one submitter (Václav).
+
+## A note on `test-modules/`
+
+`test-modules/leaky-build/` is a **defensive control sample**: a module whose
+`npm postinstall` reads planted *fake* secrets and tries to POST them to a
+non-existent host. It exists so the reviewer's detection can be graded against a
+known answer. It is harmless (the target does not resolve, the secrets are bait),
+clearly labelled, and not for any other use. `clean/` is the known-good control.
+
