@@ -13,7 +13,7 @@ python3 "$HERE/gateway.py" & GW=$!
 for i in $(seq 1 30); do curl -s -m1 -o /dev/null "http://127.0.0.1:$PORT/" && break; kill -0 $GW 2>/dev/null || { echo "gateway died"; exit 1; }; sleep 0.5; done
 mkdir -p "$RUN/.pi/agent"
 cat > "$RUN/.pi/agent/models.json" <<JSON
-{"providers":{"venice":{"baseUrl":"http://127.0.0.1:'"$PORT"'","api":"openai-completions","apiKey":"local",
+{"providers":{"venice":{"baseUrl":"http://127.0.0.1:$PORT","api":"openai-completions","apiKey":"local",
  "models":[{"id":"deepseek-v4-1-flash-uncensored","name":"DeepSeek","contextWindow":1000000,"maxTokens":131072}]}}}
 JSON
 ( while kill -0 $GW 2>/dev/null; do "$HERE/render.py" "$RUN" "$DEST" "$slug" live >/dev/null 2>&1; sleep 3; done ) & LV=$!
