@@ -58,6 +58,16 @@ You start in `/run/src`. What you have:
 4. **Be exhaustive.** A real audit of a module this size finds many issues. Keep going
    until you have covered every surface. Low-severity and hardening issues count.
 
+## Working in the sandbox
+
+- **Kill processes by PID only** (`kill <pid>`), never by pattern: `pkill -f`
+  and `killall` match your own process too, and one ended a review here.
+  Leave `desk-recorder`, `Xvfb` and Basecamp to `desk`.
+- **Put a time limit on anything that may hang** (`timeout 120 …`).
+- **Write the report as you go.** Start `report.md` once you have mapped
+  the attack surface, and add each finding when you confirm or refute it. A
+  review that is stopped early still publishes what you wrote.
+
 ## Report — write `report.md` and `report.json` in `/run/src`
 
 `report.md`, in this exact shape (model it on a professional audit):

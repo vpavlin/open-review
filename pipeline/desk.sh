@@ -65,17 +65,23 @@ ocr() {  # one line per text line on screen: "x,y  text" (x,y = its centre)
   # Basecamp is light text on dark. Inverted grey alone gives tesseract
   # nothing at all (tried 2026-10-27); tripled and contrast-stretched it reads
   # every label but the smallest.
-  convert "$f" -alpha off -colorspace Gray -negate -resize 300% -depth 8 -level 10%,80% "$S/ocr2.png" 2>/dev/null || cp "$f" "$S/ocr2.png"
-  tesseract "$S/ocr2.png" - --psm 11 tsv 2>/dev/null | awk -F'\t' 'NR>1 && $12!="" && $11>40 {
+  # Doubled reads as many words as tripled in half the time, and one thread
+  # beats six: beside a compile, threaded tesseract took minutes, the
+  # reviewer started killing it, and its pkill took pi down (forumer, run 3).
+  convert "$f" -alpha off -colorspace Gray -negate -resize 200% -depth 8 -level 10%,80% "$S/ocr2.png" 2>/dev/null || cp "$f" "$S/ocr2.png"
+  OMP_THREAD_LIMIT=1 timeout 60 tesseract "$S/ocr2.png" - --psm 11 tsv 2>/dev/null | awk -F'\t' 'NR>1 && $12!="" && $11>40 {
       k=$3"-"$4"-"$5; if(!(k in t)){t[k]=$12; l[k]=$7; tp[k]=$8; r[k]=$7+$9; b[k]=$8+$10; o[++n]=k}
       else {t[k]=t[k]" "$12; if($7+$9>r[k])r[k]=$7+$9; if($8+$10>b[k])b[k]=$8+$10}
-    } END {for(i=1;i<=n;i++){k=o[i]; printf "%d,%d\t%s\n", (l[k]+r[k])/6, (tp[k]+b[k])/6, t[k]}}'
+    } END {for(i=1;i<=n;i++){k=o[i]; printf "%d,%d\t%s\n", (l[k]+r[k])/4, (tp[k]+b[k])/4, t[k]}}'
 }
 
 case "${1:-}" in
   start)
     Xvfb :99 -screen 0 "${res}x24" -nolisten tcp >/dev/null 2>&1 & echo $! > "$S/xvfb.pid"; sleep 2
-    ffmpeg -nostdin -loglevel error -f x11grab -framerate 4 -video_size "${W}x${H}" -i :99 \
+    # The recorder runs under its own name: a reviewer clearing stuck
+    # processes with "pkill ffmpeg" ended run 3's video.
+    cp -f "$(command -v ffmpeg)" "$S/desk-recorder"
+    "$S/desk-recorder" -nostdin -loglevel error -f x11grab -framerate 4 -video_size "${W}x${H}" -i :99 \
       -c:v libx264 -preset veryfast -crf 32 -pix_fmt yuv420p -movflags +faststart "$M/session.mp4" \
       >/dev/null 2>"$S/ffmpeg.err" & echo $! > "$S/ffmpeg.pid"
     bc_up; echo "desk: ${res} screen, Basecamp up, recording to media/session.mp4"; ocr | head -40 ;;

@@ -69,6 +69,10 @@ PY2
 # never a quiet one: published as failed, with no verdict.
 if [ -s "$RUN/logs/inference-failed.txt" ]; then
   { echo "The model provider failed and kept failing, so the review could not be done:"; cat "$RUN/logs/inference-failed.txt"; } > "$RUN/logs/failed.txt"
+elif rc=$(cat "$RUN/logs/reviewer.rc" 2>/dev/null) && [ -n "$rc" ] && [ "$rc" != 0 ] && [ "$rc" != 124 ]; then
+  # 124 is the time cap: published with what it has, marked as stopped.
+  { echo "The reviewer stopped before it finished (exit $rc)."
+    [ -s "$RUN/report.md" ] && echo "What it had written by then is in report.md, unfinished."; } > "$RUN/logs/failed.txt"
 elif [ ! -s "$RUN/report.md" ]; then
   echo "The reviewer wrote no report (see session.log for how it ended)." > "$RUN/logs/failed.txt"
 fi

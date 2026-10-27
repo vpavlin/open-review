@@ -35,9 +35,10 @@ cd /run/src 2>/dev/null || { echo '{"error":"no source"}' > "$B/summary.json"; k
 # it is published with what it has and says so.
 MAX_MIN=${REVIEW_MAX_MIN:-150}
 strace -f -qq -e trace=openat,open,connect,execve,unlinkat,unlink,rename -e signal=none -s 300 -o "$B/strace.log" \
-  timeout --kill-after=60 "${MAX_MIN}m" pi --model "venice/${REVIEW_MODEL}" -p "$(cat /pipeline/reviewer-prompt.md)" \
+  timeout --kill-after=60 "${MAX_MIN}m" pi --model "venice/${REVIEW_MODEL}" -p "Your instructions are in /pipeline/reviewer-prompt.md. Read all of it first, then do what it says." \
   > /run/logs/session.txt 2>&1
 rc=$?
+echo "$rc" > /run/logs/reviewer.rc
 [ "$rc" = 124 ] && echo "The review hit its ${MAX_MIN}-minute limit and was stopped; what it found by then is below." > /run/logs/timed-out.txt
 # pi wrote report.md/report.json into /run/src; move them up to the run root.
 for f in report.md report.json; do [ -f "/run/src/$f" ] && cp "/run/src/$f" "/run/$f"; done
@@ -55,7 +56,7 @@ mp4=$(stat -c%s /run/media/session.mp4 2>/dev/null || echo 0)
 if [ "$mp4" -gt 0 ] && ! ffprobe -v error -show_entries format=duration -of csv=p=0 /run/media/session.mp4 >/dev/null 2>&1; then
   rm -f /run/media/session.mp4
 fi
-if ! ls /run/media/*.png /run/media/session.mp4 >/dev/null 2>&1; then
+if ! ls /run/media/*.png >/dev/null 2>&1 && [ ! -f /run/media/session.mp4 ]; then
   { echo "No screenshot or video: the reviewer did not get Basecamp to show the module."
     echo "Last lines of basecamp.log:"; echo; tail -8 /run/media/basecamp.log 2>/dev/null; } > /run/media/GUI-did-not-run.txt
 fi
