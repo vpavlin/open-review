@@ -81,3 +81,11 @@ A running log: newest last. What was done, why, and what was found.
   - `report.sh`: the gateway now picks a free port and is waited-for-ready before pi launches; a stale gateway from the previous run had left the clean run's pi hanging with nowhere to call.
 - **Model cost:** a few cents per review (gateway.jsonl has the token counts).
 - **Next:** build-and-compare the submitted .lgx; harden (run report-pi in a cage too); the live view is meta-refresh (no JS) — a nicer stream later; a real community module end to end with Václav.
+
+## 2026-10-27: clean control graded, and an honest gap surfaced
+
+- `clean` (quiet_clock) run: behaviour correct — **no bait read, no hosts contacted**. The reviewer confirmed a genuine 5-line QtQuick clock.
+- Notably the reviewer did NOT rubber-stamp it: it flagged **"high: dynamic run vacuous — LogosBasecamp never executed the module"**. True: the Basecamp AppImage aborts on GL/graphics in the headless sandbox, so for a **pure-QML module** the dynamic stage has little to show. For modules with build/install/hub code (the dangerous ones), dynamic capture is strong (leaky proved it).
+- So: both controls graded right (known-bad critical, known-good clean), and the reviewer is appropriately skeptical of weak evidence.
+- **Gap to close:** make Basecamp actually run a QML module in the sandbox (software GL: LIBGL_ALWAYS_SOFTWARE/mesa llvmpipe, or a virtual GPU), so QML-only modules get real dynamic coverage. Build+install code is already covered.
+- PoC status: **working end to end** on both controls, published and served, live view during the run.
