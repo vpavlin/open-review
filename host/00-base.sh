@@ -26,3 +26,11 @@ ufw default deny incoming
 ufw default allow outgoing
 ufw allow 22/tcp
 ufw --force enable
+
+# The shrooms daemon (installed by host/10-shrooms.sh) needs WireGuard,
+# its delivery node's TCP port and discovery, and traffic arriving over the
+# mesh interface itself: a deny-by-default firewall hid the Duet's agent from
+# the whole mesh until its interface was trusted (2026-10-25).
+ufw allow 51820/udp comment "shrooms wireguard"
+ufw allow 60000/tcp comment "shrooms delivery"
+ufw allow 9000/udp comment "shrooms discovery"

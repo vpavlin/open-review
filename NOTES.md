@@ -25,3 +25,12 @@ A running log: newest last. What was done, why, and what was found.
   - ufw deny-in with only 22 open.
   - Login: `ssh openreview` from the laptop, with key `~/.ssh/openreview_ed25519`, made for this host alone.
   - Václav first couldn't log in. His SSH agent offered too many keys ("Too many authentication failures"); `-o PubkeyAuthentication=no` got him to the password prompt.
+- The **review** mesh: made by Václav on the laptop (`shrooms init --mesh review`, admin key `~/.config/shrooms/admin-review.json`).
+  - Why its own mesh: the host runs hostile code; on the office mesh it would sit beside every machine.
+  - The first attempt lost its passphrase. `shrooms mesh remove review`, then init again.
+- shrooms installed on the host (`host/10-shrooms.sh`):
+  - the published image under podman;
+  - joined with a one-time invite, as device `openreview`, overlay `fddd:2d8f:96a1:4065:df41:eee8:6368:577a`;
+  - credential until 2026-11-26: renew before then.
+- The firewall needed shrooms' ports, 51820/udp (WireGuard), 60000/tcp and 9000/udp (delivery), and the mesh interface `shrooms0` allowed in. The same deny-by-default trap that hid the Duet's agent.
+- Tunnel laptop ↔ openreview direct, about 35 ms.
