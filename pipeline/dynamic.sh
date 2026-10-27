@@ -35,5 +35,6 @@ if [ -x /opt/basecamp/Basecamp.AppImage ] && [ -f /run/src/metadata.json ]; then
 fi
 
 sleep 1; [ -n "${FF:-}" ] && kill $FF 2>/dev/null; kill $SINK 2>/dev/null
+mkdir -p "$B"
 python3 /pipeline/analyse.py "$B" > "$B/summary.json" 2>"$B/analyse.err" || echo '{"error":"analyse failed"}' > "$B/summary.json"
 echo "dynamic: done"
