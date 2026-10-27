@@ -56,12 +56,26 @@ class H(http.server.BaseHTTPRequestHandler):
         r=urllib.request.Request(VENICE,data=body,method='POST',
             headers={'Authorization':'Bearer '+KEY,'Content-Type':'application/json'})
         t0=time.time()
+        # A provider error is retried, waiting longer each time (about 25
+        # minutes in all), so an outage pauses a review rather than ending it:
+        # forumer's second run lost two hours to three 500s from Venice
+        # (2026-10-27). Each failed attempt is logged too.
         ctype='application/json'
-        try:
-            resp=urllib.request.urlopen(r,timeout=300); out=resp.read(); code=resp.status
-            ctype=resp.headers.get('Content-Type',ctype)
-        except urllib.error.HTTPError as e:
-            out=e.read(); code=e.code
+        for wait in (5,15,45,120,300,600,None):
+            try:
+                resp=urllib.request.urlopen(r,timeout=300); out=resp.read(); code=resp.status
+                ctype=resp.headers.get('Content-Type',ctype)
+            except urllib.error.HTTPError as e:
+                out=e.read(); code=e.code
+            except (urllib.error.URLError,TimeoutError,ConnectionError) as e:
+                out=json.dumps({"error":"gateway: "+str(e)}).encode(); code=502
+            if code<500 and code!=429 or wait is None: break
+            with open(os.path.join(RUN,"gateway.jsonl"),"a") as f:
+                f.write(json.dumps({"t":time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()),"status":code,
+                    "retry_in_s":wait,"model":req.get("model"),"error":out[:300].decode("utf-8","replace")})+"\n")
+            with open(os.path.join(RUN,"live.txt"),"a") as f:
+                f.write(f"\n(model provider answered {code}; retrying in {wait}s)\n")
+            time.sleep(wait)
         try: rj=json.loads(out)
         except Exception: rj=unstream(out) if req.get("stream") else {"unparsed":out[:2000].decode("utf-8","replace")}
         rec={"t":time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()),"ms":int((time.time()-t0)*1000),

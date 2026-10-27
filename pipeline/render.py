@@ -17,19 +17,24 @@ def write(name,body): open(os.path.join(dest,name),"w").write(body)
 def usage_stats(run):
     import glob
     p=os.path.join(run,"gateway.jsonl")
-    calls=0; pin=0; pout=0; cached=0; ms=0
+    calls=0; pin=0; pout=0; cached=0; ms=0; errors=0; retries=0
     if os.path.exists(p):
         for line in open(p,encoding="utf-8",errors="replace"):
             try: r=json.loads(line)
             except: continue
+            if "retry_in_s" in r: retries+=1; continue
             calls+=1; ms+=r.get("ms",0)
+            if r.get("status",200)>=400: errors+=1
             u=(r.get("response") or {}).get("usage") or {}
             pin+=u.get("prompt_tokens",0); pout+=u.get("completion_tokens",0)
             cached+=(u.get("prompt_tokens_details") or {}).get("cached_tokens",0)
     # deepseek-v4-1-flash-uncensored (Venice): $0.33/M in, $1.32/M out, $0.00825/M cached
     cost=((pin-cached)*0.33 + cached*0.00825 + pout*1.32)/1e6
     return {"model_calls":calls,"input_tokens":pin,"cached_input_tokens":cached,"output_tokens":pout,
-            "model_seconds":round(ms/1000,1),"est_cost_usd":round(cost,4)}
+            "model_seconds":round(ms/1000,1),"est_cost_usd":round(cost,4),
+            "provider_errors":errors,"retries":retries,
+            # Before 03aff47 streamed replies weren't logged, so no tokens either.
+            "recorded":not (calls>errors and pin==0)}
 
 if mode=="live":
     def latest_shot():
@@ -95,7 +100,11 @@ usage=(f"<table><tr><th>model calls</th><td>{U['model_calls']}</td></tr>"
        f"<tr><th>input tokens</th><td>{U['input_tokens']:,} ({U['cached_input_tokens']:,} cached)</td></tr>"
        f"<tr><th>output tokens</th><td>{U['output_tokens']:,}</td></tr>"
        f"<tr><th>model time</th><td>{U['model_seconds']} s</td></tr>"
-       f"<tr><th>estimated cost</th><td>${U['est_cost_usd']}</td></tr></table>")
+       f"<tr><th>estimated cost</th><td>${U['est_cost_usd']}</td></tr>"
+       f"<tr><th>provider errors</th><td>{U['provider_errors']} (retries {U['retries']})</td></tr></table>")
+if not U["recorded"]:
+    usage=(f"<p>{U['model_calls']} model calls, {U['model_seconds']} s of model time. Token counts were not "
+           "recorded for this run: the gateway didn't log streamed replies yet.</p>")
 ran="".join(f"<li>{esc(x)}</li>" for x in (rep.get("ran") or [])[:30]) if rep else ""
 nottested="".join(f"<li>{esc(x)}</li>" for x in (rep.get("not_tested") or [])[:30]) if rep else ""
 behrow=""
