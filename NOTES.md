@@ -15,7 +15,7 @@ A running log: newest last. What was done, why, and what was found.
 - Venice TEE checked (samples in the laptop's ~/notes/venice-tee-signature-sample-20261027):
   - **Works:** the hardware attestation (NEAR AI, Intel TDX plus NVIDIA Hopper).
   - **Doesn't close yet:** the per-response signature is a gateway key that's not in the attestation, over hashes we can't recompute.
-- **Host:** a Contabo Cloud VPS 6 (6 vCPU, 12 GB, 200 GB), Ubuntu 24.04, kernel 6.8.0-147-generic, KVM guest, 77.237.236.27.
+- **Host:** a Contabo Cloud VPS 6 (6 vCPU, 12 GB, 200 GB), Ubuntu 24.04, kernel 6.8.0-147-generic, KVM guest, IP kept out of the public repo (see the private deploy note).
   - **Why Contabo:** Hetzner was €36–70 a month for this size.
   - **Why no nested VM:** the rented VM is itself the isolation boundary; the disguised container runs inside it.
 - `host/00-base.sh` applied:
@@ -34,7 +34,7 @@ A running log: newest last. What was done, why, and what was found.
   - credential until 2026-11-26: renew before then.
 - The firewall needed shrooms' ports, 51820/udp (WireGuard), 60000/tcp and 9000/udp (delivery), and the mesh interface `shrooms0` allowed in. The same deny-by-default trap that hid the Duet's agent.
 - Tunnel laptop ↔ openreview direct, about 35 ms.
-- **Publishing (PoC):** reviews are served from this host, at http://77.237.236.27/.
+- **Publishing (PoC):** reviews are served from this host, at http://REVIEW-HOST/.
   - Václav didn't want the review host pushing to data.vpavlin.xyz.
   - A pull from there was more than a PoC needs.
   - The cost: an escape lands next to the published reviews.
@@ -75,7 +75,7 @@ A running log: newest last. What was done, why, and what was found.
 - Full pipeline ran end to end on the `leaky-build` control (localdir): clone → static (gitleaks/osv/semgrep) → dynamic (disguised sandbox, DNS/connection sink, bait) → report (pi reviewer via logging gateway, live-streamed) → publish.
 - **The dynamic stage caught the planted attack:** the module's `npm postinstall` read `/root/.ssh/id_ed25519`, `/root/.config/solana/id.json` and `/root/.aws/credentials`, then tried to reach `telemetry.handy-notes-cdn.net` (sinkholed + logged). `read_secret_then_contacted_external_host: true`.
 - **The reviewer graded it right:** critical exfiltration (src/collect.js), the contradicted README "never leaves your device" claim, and it flagged the reviewer-directed comment (repo_tried_to_instruct_reviewer: true — a true positive on my control's own label).
-- Published, served read-only: http://77.237.236.27/leaky-build-HEAD/ (and /live.html meta-refreshed during the run).
+- Published, served read-only: http://REVIEW-HOST/leaky-build-HEAD/ (and /live.html meta-refreshed during the run).
 - **Fixes from the run:**
   - `analyse.py`: contacted-hosts parsing dropped the "dns … [sinkholed]" tag.
   - `report.sh`: the gateway now picks a free port and is waited-for-ready before pi launches; a stale gateway from the previous run had left the clean run's pi hanging with nowhere to call.

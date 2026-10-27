@@ -16,7 +16,7 @@ live(){ printf '%s\n' "$*" >> "$RUN/live.txt"; "$HERE/render.py" "$RUN" "$DEST" 
 inbox(){ podman run --rm --network "$1" -v "$RUN:/run:z" -w /run "$IMG" bash -lc "$2"; }
 
 : > "$RUN/live.txt"; live "# Reviewing $REPO @ $COMMIT"; live "starting…"
-log "review $REPO @ $COMMIT -> $RUN ; live at http://77.237.236.27/$slug/live.html"
+log "review $REPO @ $COMMIT -> $RUN ; live at ${REVIEW_BASE:-http://REVIEW-HOST}/$slug/live.html"
 
 live "## clone"; log "clone"
 if [[ "$REPO" == localdir:* ]]; then
@@ -53,4 +53,4 @@ live "## report: the reviewer reads the evidence"; log "report"
 "$HERE/report.sh" "$RUN" "$REPO" "$COMMIT" 2>&1 | tail -4 | tee -a "$RUN/logs/pipeline.log"
 
 log "publish"; "$HERE/render.py" "$RUN" "$DEST" "$slug" final 2>&1 | tee -a "$RUN/logs/pipeline.log"
-log "done -> http://77.237.236.27/$slug/"
+log "done -> ${REVIEW_BASE:-http://REVIEW-HOST}/$slug/"
