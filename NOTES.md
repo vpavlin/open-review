@@ -116,3 +116,26 @@ A running log: newest last. What was done, why, and what was found.
   recompiled the whole core with sanitizers on one core (~2.5 min per attempt,
   ~1 model call per 9 min). Prompt now says build the library once with all
   cores and link probes to it (63cc8ed).
+- **No screen at all in run 2.** The in-sandbox reviewer was told to install
+  the module into Basecamp but had no display, recorder or installer, so the
+  report would have no media. Built `desk` (cdd7c83, acf36a7): a screen sized
+  to the disguised panel, Basecamp extracted once with its own user dir, a
+  whole-session recording, numbered shots, an lgpm-style `.lgx` install, and
+  `desk read` (OCR with click points), since DeepSeek can't see images.
+- Getting forumer to actually open took three fixes, each found by trying it:
+  - forumer needs `delivery_module ~0.4.0`, which Basecamp doesn't bundle:
+    a red cross in the sidebar. `fetch_deps.py` fetches declared deps from
+    the official catalogue (the AppImage names it:
+    logos-co/logos-modules-release logos-repo.json → index.json), on the
+    host so the sandbox's hosts-contacted record stays the module's own,
+    sha256-checked and cached.
+  - tesseract read nothing from the inverted grey screen; 3× and
+    contrast-stretched it reads every label but the smallest.
+  - The window stayed 1600x900: xdotool's first match wasn't the visible one.
+- Then: forumer opens to its identity screen at 1920x1200, its node joins
+  logos.dev, and it **sends on /forumer/3/public/proto before any identity
+  exists**, for the reviewer to look at. The 72 s video plays.
+- forumer's README says the code is on `hardening/v0.2.5`, not master. Not
+  so: master is the v0.2.5 tag plus two docs-only commits.
+- `review.sh` took an `.lgx` URL and ignored it; it now fetches it.
+- A hard time cap (REVIEW_MAX_MIN, default 150), shown in the report when hit.
