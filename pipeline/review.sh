@@ -65,5 +65,14 @@ try:
 except Exception: pass
 PY2
 
+# A review whose model failed, or that wrote no report, is a failed review,
+# never a quiet one: published as failed, with no verdict.
+if [ -s "$RUN/logs/inference-failed.txt" ]; then
+  { echo "The model provider failed and kept failing, so the review could not be done:"; cat "$RUN/logs/inference-failed.txt"; } > "$RUN/logs/failed.txt"
+elif [ ! -s "$RUN/report.md" ]; then
+  echo "The reviewer wrote no report (see session.log for how it ended)." > "$RUN/logs/failed.txt"
+fi
+[ -s "$RUN/logs/failed.txt" ] && { log "FAILED: $(head -1 "$RUN/logs/failed.txt")"; live "## REVIEW FAILED"; live "$(cat "$RUN/logs/failed.txt")"; }
+
 log "publish"; "$HERE/render.py" "$RUN" "$DEST" "$slug" final 2>&1 | tee -a "$RUN/logs/pipeline.log"
 log "done -> ${REVIEW_BASE:-http://REVIEW-HOST}/$slug/"

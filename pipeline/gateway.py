@@ -5,7 +5,9 @@
 # redaction pass, and a running human-readable transcript is appended for the
 # live view. OpenAI-compatible: forwards /chat/completions to Venice.
 import os,sys,json,time,re,urllib.request,http.server,hashlib
-VENICE="https://api.venice.ai/api/v1/chat/completions"
+VENICE=os.environ.get("GATEWAY_UPSTREAM","https://api.venice.ai/api/v1/chat/completions")
+# Seconds between retries of a provider error; overridable for tests.
+WAITS=[int(x) for x in os.environ.get("GATEWAY_RETRY_WAITS","5,15,45,120,300,600").split(",") if x]
 KEY=os.environ["VENICE_INFERENCE_KEY"]
 TOKEN=os.environ.get("REVIEW_TOKEN","")
 BIND=os.environ.get("GATEWAY_BIND","127.0.0.1")
@@ -61,7 +63,7 @@ class H(http.server.BaseHTTPRequestHandler):
         # forumer's second run lost two hours to three 500s from Venice
         # (2026-10-27). Each failed attempt is logged too.
         ctype='application/json'
-        for wait in (5,15,45,120,300,600,None):
+        for wait in WAITS+[None]:
             try:
                 resp=urllib.request.urlopen(r,timeout=300); out=resp.read(); code=resp.status
                 ctype=resp.headers.get('Content-Type',ctype)
@@ -76,6 +78,13 @@ class H(http.server.BaseHTTPRequestHandler):
             with open(os.path.join(RUN,"live.txt"),"a") as f:
                 f.write(f"\n(model provider answered {code}; retrying in {wait}s)\n")
             time.sleep(wait)
+        if code>=500 or code==429:
+            # Out of retries: the review can't be trusted to have been done,
+            # so the pipeline fails it rather than publishing a partial one.
+            os.makedirs(os.path.join(RUN,"logs"),exist_ok=True)
+            with open(os.path.join(RUN,"logs","inference-failed.txt"),"a") as f:
+                f.write(f"{time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime())} {req.get('model')} answered {code} "
+                        f"after every retry: {out[:300].decode('utf-8','replace')}\n")
         try: rj=json.loads(out)
         except Exception: rj=unstream(out) if req.get("stream") else {"unparsed":out[:2000].decode("utf-8","replace")}
         rec={"t":time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()),"ms":int((time.time()-t0)*1000),

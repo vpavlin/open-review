@@ -6,6 +6,7 @@
 # the env GATEWAY_URL + REVIEW_TOKEN so pi can reach the model through the host
 # gateway (the Venice key never enters here).
 set -uo pipefail
+REVIEW_MODEL=${REVIEW_MODEL:-deepseek-v4-1-flash-1017}
 B=/run/behaviour; mkdir -p "$B" /run/media
 /usr/local/sbin/disguise.sh /usr/local/sbin/profiles.json "$B/disguise.json" >/dev/null 2>&1 || true
 /usr/local/sbin/bait.sh /root "$B/bait.json" >/dev/null 2>&1 || true
@@ -24,7 +25,7 @@ export HOME=/root
 mkdir -p /root/.pi/agent
 cat > /root/.pi/agent/models.json <<JSON
 {"providers":{"venice":{"baseUrl":"${GW}","api":"openai-completions","apiKey":"${REVIEW_TOKEN}",
- "models":[{"id":"deepseek-v4-1-flash-uncensored","name":"DeepSeek","contextWindow":1000000,"maxTokens":131072}]}}}
+ "models":[{"id":"${REVIEW_MODEL}","name":"DeepSeek","contextWindow":1000000,"maxTokens":131072}]}}}
 JSON
 
 # The whole reviewer session is straced: its builds, its probes and anything the
@@ -34,7 +35,7 @@ cd /run/src 2>/dev/null || { echo '{"error":"no source"}' > "$B/summary.json"; k
 # it is published with what it has and says so.
 MAX_MIN=${REVIEW_MAX_MIN:-150}
 strace -f -qq -e trace=openat,open,connect,execve,unlinkat,unlink,rename -e signal=none -s 300 -o "$B/strace.log" \
-  timeout --kill-after=60 "${MAX_MIN}m" pi --model venice/deepseek-v4-1-flash-uncensored -p "$(cat /pipeline/reviewer-prompt.md)" \
+  timeout --kill-after=60 "${MAX_MIN}m" pi --model "venice/${REVIEW_MODEL}" -p "$(cat /pipeline/reviewer-prompt.md)" \
   > /run/logs/session.txt 2>&1
 rc=$?
 [ "$rc" = 124 ] && echo "The review hit its ${MAX_MIN}-minute limit and was stopped; what it found by then is below." > /run/logs/timed-out.txt
