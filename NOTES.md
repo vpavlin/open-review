@@ -69,3 +69,15 @@ A running log: newest last. What was done, why, and what was found.
 - **No phone on the review mesh.** Václav talks to the reviewer through the laptop session (me); I task the reviewer over the mesh. One fewer device with access.
 - **No SSH key for Václav on the host.** He reaches it via the laptop (me) or not at all. Only the laptop's `openreview_ed25519` key has shell access.
 - So the review mesh has two devices: the laptop and the host. The laptop tasks the reviewer agent over the mesh; nothing else talks to it.
+
+## 2026-10-27: first full PoC review — it works
+
+- Full pipeline ran end to end on the `leaky-build` control (localdir): clone → static (gitleaks/osv/semgrep) → dynamic (disguised sandbox, DNS/connection sink, bait) → report (pi reviewer via logging gateway, live-streamed) → publish.
+- **The dynamic stage caught the planted attack:** the module's `npm postinstall` read `/root/.ssh/id_ed25519`, `/root/.config/solana/id.json` and `/root/.aws/credentials`, then tried to reach `telemetry.handy-notes-cdn.net` (sinkholed + logged). `read_secret_then_contacted_external_host: true`.
+- **The reviewer graded it right:** critical exfiltration (src/collect.js), the contradicted README "never leaves your device" claim, and it flagged the reviewer-directed comment (repo_tried_to_instruct_reviewer: true — a true positive on my control's own label).
+- Published, served read-only: http://77.237.236.27/leaky-build-HEAD/ (and /live.html meta-refreshed during the run).
+- **Fixes from the run:**
+  - `analyse.py`: contacted-hosts parsing dropped the "dns … [sinkholed]" tag.
+  - `report.sh`: the gateway now picks a free port and is waited-for-ready before pi launches; a stale gateway from the previous run had left the clean run's pi hanging with nowhere to call.
+- **Model cost:** a few cents per review (gateway.jsonl has the token counts).
+- **Next:** build-and-compare the submitted .lgx; harden (run report-pi in a cage too); the live view is meta-refresh (no JS) — a nicer stream later; a real community module end to end with Václav.

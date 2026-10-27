@@ -14,7 +14,7 @@ opens=set(re.findall(r'openat?\([^,]*,\s*"([^"]+)"',strace))
 fails=set(re.findall(r'openat?\([^)]*"([^"]+)"[^)]*=\s*-1',strace))
 bait_read=[p for p in bait if p in opens]
 # hosts contacted by name (dns sink) and raw IP connects
-hosts=sorted({l.split(' ',1)[1].strip() for l in dns.splitlines() if ' ' in l})
+hosts=sorted({p[2] for p in (l.split() for l in dns.splitlines()) if len(p)>=3 and p[1]=="dns"})
 local=('127.0.0.1','::1','localhost')
 ext_hosts=[h for h in hosts if not any(h==x or h.endswith('.localhost') for x in local)]
 connects=sorted(set(re.findall(r'connect\([^,]*,\s*\{sa_family=AF_INET6?,[^}]*?(?:inet6?_addr|sin6?_addr[^,]*|"[0-9a-f:.]+")[^}]*\}',strace)))

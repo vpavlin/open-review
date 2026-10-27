@@ -6,11 +6,14 @@ set -uo pipefail
 RUN=$1; REPO=$2; COMMIT=$3; HERE=$(cd "$(dirname "$0")" && pwd)
 slug=$(basename "$RUN"); DEST=/srv/reviews/$slug
 export VENICE_INFERENCE_KEY=$(grep -oP 'VENICE_INFERENCE_KEY=\K.*' /home/reviewer/.pi/agent/.env)
-export REVIEW_RUN=$RUN GATEWAY_PORT=7399
-python3 "$HERE/gateway.py" & GW=$!; sleep 1
+export REVIEW_RUN=$RUN
+PORT=$(python3 -c "import socket;s=socket.socket();s.bind((\"127.0.0.1\",0));print(s.getsockname()[1]);s.close()")
+export GATEWAY_PORT=$PORT
+python3 "$HERE/gateway.py" & GW=$!
+for i in $(seq 1 30); do curl -s -m1 -o /dev/null "http://127.0.0.1:$PORT/" && break; kill -0 $GW 2>/dev/null || { echo "gateway died"; exit 1; }; sleep 0.5; done
 mkdir -p "$RUN/.pi/agent"
 cat > "$RUN/.pi/agent/models.json" <<JSON
-{"providers":{"venice":{"baseUrl":"http://127.0.0.1:7399","api":"openai-completions","apiKey":"local",
+{"providers":{"venice":{"baseUrl":"http://127.0.0.1:'"$PORT"'","api":"openai-completions","apiKey":"local",
  "models":[{"id":"deepseek-v4-1-flash-uncensored","name":"DeepSeek","contextWindow":1000000,"maxTokens":131072}]}}}
 JSON
 ( while kill -0 $GW 2>/dev/null; do "$HERE/render.py" "$RUN" "$DEST" "$slug" live >/dev/null 2>&1; sleep 3; done ) & LV=$!
