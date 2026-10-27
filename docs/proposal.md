@@ -1,6 +1,8 @@
 # Open review: automatic audits of Basecamp modules
 
-Proposal · updated 2026-10-27 · laptop/shrooms for Václav
+Updated 2026-10-27 · laptop/shrooms for Václav
+
+**Code:** [github.com/vpavlin/open-review](https://github.com/vpavlin/open-review) (public). **Status: working proof of concept** — the full pipeline runs end to end on a dedicated VM. See `NOTES.md` (running log) and `BACKLOG.md` in the repo.
 
 ## Summary
 
@@ -12,6 +14,8 @@ A service that takes an open-source Basecamp module and publishes an adversarial
 - whether it works, and how it breaks.
 
 Every submission is tested properly: built, installed, clicked through, attacked and recorded. It runs in a sandbox dressed as an ordinary Linux laptop, so code that hides from sandboxes has a harder time hiding.
+
+**It works today.** The PoC was graded on two controls: a planted supply-chain sample was caught as critical (its install read the bait SSH key, Solana seed and AWS creds and tried to phone home), and a clean module came back clean. Both are published, read-only, with full evidence and a live view that refreshes while a review runs.
 
 - **Scope:** Basecamp modules only for now. LEZ programs, APKs and other software later.
 - **What it is:** evidence and findings. It never certifies a module as safe.
@@ -161,16 +165,17 @@ privileges (the plan's high-value R&D) are what limit damage there. open-review 
 cheap attacks expensive to hide and produces the evaluated-rootHash record the Freeze rule
 and an Evaluated Releases catalog need.
 
-## Plan
+## Status
 
-**PoC, on a dedicated VM, you as the only submitter:**
+**PoC, on a dedicated VM (Contabo VPS 6), reachable only over a private mesh — done:**
 
-- [ ] The VM, from an image, with nothing else on it.
-- [ ] The laptop disguise: three profiles, picked at random per run.
-- [ ] The recording: strace, the write overlay, network and process logs, bait.
-- [ ] A headless Basecamp in the sandbox, driven like our own app tests, with screenshots and video.
-- [ ] The reviewer agent (pi, Venice DeepSeek uncensored) with the auditor's method, starting fresh per task.
-- [ ] The publishing pipeline, with hash-chained, signed logs.
-- [ ] Five real modules reviewed, one with a planted problem as a control. Measure cost and time.
+- [x] The VM, rebuildable from `host/00-base.sh` → `10-shrooms.sh` → `20-web.sh` → `30-agent.sh`.
+- [x] The laptop disguise: three profiles (XPS 13, ThinkPad X1, Framework 13), picked at random per run.
+- [x] The recording: strace (reads, incl. refused; writes; connects; execs), a logging DNS/connection sink, bait.
+- [x] The reviewer agent (pi, Venice DeepSeek uncensored), auditor's method, fresh per task; the model key held off the sandbox in a logging gateway.
+- [x] The publishing pipeline: hash-chained logs, an escaped read-only report, and a live view.
+- [x] Graded on a known-bad (critical) and a known-good (clean) control.
 
-**Lambda prize:** an open review service for Logos ecosystem software, with our PoC as the reference.
+**Next (see `BACKLOG.md`):** software GL so Basecamp renders pure-QML modules in the sandbox; build-and-compare the `.lgx`; `lgx verify` + rootHash/signature as a first-class signal; harden the report stage.
+
+**Lambda prize:** an open review service for Logos ecosystem software, with this PoC as the reference.
