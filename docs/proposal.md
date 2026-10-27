@@ -138,6 +138,29 @@ Proper testing costs more than reading code. Estimates on Venice DeepSeek V4.1 F
 - **Fixes:** offered as pull requests to the author.
 - **Release watching:** each new version reviewed and compared with the last, with an alert over Logos Messaging when behaviour changes.
 
+## How this fits the Basecamp module security plan
+
+open-review is the **automated triage** layer of the broader plan to make community
+Basecamp modules safe to build, submit, review and run. It does not replace the trust
+architecture (provenance-bound privileges, signer continuity, access-policy-on,
+per-module OS sandboxing) — those are platform changes in Basecamp. It observes and
+reports; it never approves.
+
+| Plan item | What open-review does |
+| --- | --- |
+| Automated triage (isolated runner: verify, hash match, native-binary inventory, dep & secret scans, sandboxed run with net/file tracing, AI review) | This, end to end. Reports as signals, never "passed review". |
+| Reviewer runbook (fresh VM, no org tokens, read-only agent creds, testnet only, read scripts first) | Enforced mechanically: fresh sandbox per submission, the model key held off the sandbox in a gateway, bait instead of real keys. |
+| Reviewer-targeting / prompt injection | The repo is hostile data; only the pipeline publishes; findings need a reproducible PoC; text in the repo aimed at the reviewer is itself a finding. |
+| Integrity manifest + Freeze rule | meta.json records commit, artifact hashes, model/prompt versions; logs are hash-chained — the evaluated-rootHash record. |
+| Risk tiers | The tiered depth (base testing for all, deeper on request/paid) maps to Tier 0/1/2; bait-and-exfil detection matters most at Tier 2 (keys/funds). |
+| Negligent builder (most common) | Static scans + "read your key, phoned home" catch plaintext keys, leaked secrets and abandoned deps cheaply, at scale. |
+
+**The honest ceiling:** a reviewer cannot catch a dormant or remotely-configured payload,
+and cannot confine native code that runs unreviewed. The OS sandbox and provenance-bound
+privileges (the plan's high-value R&D) are what limit damage there. open-review makes the
+cheap attacks expensive to hide and produces the evaluated-rootHash record the Freeze rule
+and an Evaluated Releases catalog need.
+
 ## Plan
 
 **PoC, on a dedicated VM, you as the only submitter:**
