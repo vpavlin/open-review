@@ -1,0 +1,54 @@
+# The reviewer's sandbox: where a submitted Basecamp module is built, installed,
+# run, recorded and attacked. Self-contained (does not depend on the shrooms
+# workbench image), so open-review stands on its own.
+#
+# Root inside, nothing of the host's: the agent runs each review as a fresh
+# caged pi session (shrooms ADR-072), with no credentials and a network limited
+# to the model gateway and package mirrors.
+
+FROM docker.io/library/node:22-bookworm-slim AS reviewer
+
+# Build, read and run tools.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        git curl ca-certificates openssh-client build-essential pkg-config \
+        python3 python3-pip python3-venv pipx \
+        ripgrep jq less procps psmisc unzip xz-utils file \
+        strace ltrace \
+    && rm -rf /var/lib/apt/lists/*
+
+# pi, pinned as the shrooms cage pins it (MCP built in from 1.x; "$VAR" apiKey).
+RUN npm install -g @earendil-works/pi-coding-agent@1.4.0 && npm cache clean --force
+
+# Run and record a GUI (Basecamp is Qt): an X server to drive, ffmpeg and
+# ImageMagick to record, and the libraries Qt apps load. AppImages self-extract
+# (no FUSE in a cage).
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        xvfb xauth xdotool x11-utils x11-xserver-utils imagemagick ffmpeg \
+        fonts-dejavu-core fonts-noto-core fonts-noto-color-emoji \
+        libgl1 libegl1 libopengl0 libglib2.0-0 libfontconfig1 libfreetype6 libdbus-1-3 libnss3 libasound2 \
+        libxkbcommon0 libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \
+        libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-xinerama0 libxcb-xkb1 libxcb-xfixes0 \
+        libx11-xcb1 libxrender1 libxi6 libxcomposite1 libxdamage1 libxrandr2 libxtst6 libsm6 libice6 \
+    && rm -rf /var/lib/apt/lists/*
+ENV APPIMAGE_EXTRACT_AND_RUN=1
+
+# Static review checks: secrets, dependency vulnerabilities, code patterns.
+# gitleaks and osv-scanner as pinned release binaries; semgrep via pipx.
+ARG GITLEAKS=8.21.2
+ARG OSV=1.9.0
+RUN set -eux; a="$(dpkg --print-architecture)"; \
+    case "$a" in amd64) gl=x64; os=linux_amd64;; arm64) gl=arm64; os=linux_arm64;; esac; \
+    curl -fsSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS}/gitleaks_${GITLEAKS}_linux_${gl}.tar.gz" | tar -xz -C /usr/local/bin gitleaks; \
+    curl -fsSL "https://github.com/google/osv-scanner/releases/download/v${OSV}/osv-scanner_${os}" -o /usr/local/bin/osv-scanner; \
+    chmod +x /usr/local/bin/osv-scanner
+RUN PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin pipx install semgrep >/dev/null
+
+# faketime, to move the sandbox clock forward during a run so code that waits
+# before misbehaving still acts.
+RUN apt-get update && apt-get install -y --no-install-recommends faketime && rm -rf /var/lib/apt/lists/*
+
+COPY disguise.sh bait.sh record.sh profiles.json /usr/local/sbin/
+RUN chmod +x /usr/local/sbin/disguise.sh /usr/local/sbin/bait.sh /usr/local/sbin/record.sh
+
+LABEL xyz.vpavlin.open-review="reviewer"
+CMD ["sleep", "infinity"]

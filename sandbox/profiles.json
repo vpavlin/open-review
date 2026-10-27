@@ -1,0 +1,5 @@
+{
+  "xps13-9340":    {"vendor":"Dell Inc.",    "product":"XPS 13 9340",            "cpu":"Intel(R) Core(TM) Ultra 7 155H", "mem_gb":16, "res":"1920x1200", "host":"dell-xps"},
+  "x1carbon-g12":  {"vendor":"LENOVO",       "product":"21KC0000US ThinkPad X1 Carbon Gen 12", "cpu":"Intel(R) Core(TM) Ultra 7 165U", "mem_gb":32, "res":"1920x1200", "host":"thinkpad"},
+  "framework13-amd":{"vendor":"Framework",   "product":"Laptop 13 (AMD Ryzen 7040Series)", "cpu":"AMD Ryzen 7 7840U w/ Radeon 780M Graphics", "mem_gb":32, "res":"2256x1504", "host":"framework"}
+}

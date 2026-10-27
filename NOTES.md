@@ -47,3 +47,19 @@ A running log: newest last. What was done, why, and what was found.
   - Venice: a key of its own for open review, with a spend limit. Václav typed it on this host; it lives in `/home/reviewer/.pi/agent/.env` (mode 600). `models.json` names it as `$VENICE_INFERENCE_KEY`.
   - First call through pi with `venice/deepseek-v4-1-flash-uncensored` answered.
   - Václav lost root SSH when password logins went off; he needs his public key added.
+
+## 2026-10-27: the reviewer sandbox
+
+- `sandbox/reviewer.Containerfile`: a self-contained image (`localhost/open-reviewer:latest`), built on the VPS with rootless podman. Contents:
+  - build/read/run: git, node, pi 1.4.0, python, strace, ltrace;
+  - static checks: semgrep, gitleaks, osv-scanner;
+  - GUI run + record: Xvfb, xdotool, ffmpeg, ImageMagick, the Qt libraries;
+  - faketime, for the clock shift.
+- `sandbox/disguise.sh` (+ `profiles.json`): dress the sandbox as one of three real laptops (XPS 13 9340, ThinkPad X1 Carbon Gen 12, Framework 13 AMD), picked at random. A standard anti-evasion measure for a defensive reviewer; every review states the environment was instrumented. What works:
+  - from inside the container: home dressing, child-process env (Wayland/GNOME/locale);
+  - with the container launched `--hostname <x> --cap-add SYS_ADMIN`: hostname, DMI vendor/product bind-mounted over read-only sysfs, and `/run/.containerenv` masked with an empty bind-mount.
+  - **Cannot hide:** the kernel version (the host's), so the host runs a stock Ubuntu kernel. Stated in every report.
+- `sandbox/bait.sh`: plants fake secrets (SSH key, AWS creds, Solana seed, Electrum wallet) with unique canary strings, logged to bait.json so a read or an exfil of one is a red finding.
+- `sandbox/record.sh`: strace across the process tree for file opens (and failures), connects and execs. Writes-outside-folder and the network capture are host-side (overlay diff, logging netns): next step.
+- **Design note:** the module under test should run in a container the *pipeline* launches with these flags (hostname, caps, write-overlay, logging netns), driven by the reviewer pi session — not the shrooms cage, which does not expose them. The reviewer agent orchestrates; the pipeline runs the disguised sandbox.
+- **Open for Václav:** his SSH public key (he lost root when password logins went off); his phone on the review mesh (one more invite) once there is a reviewer to talk to.
