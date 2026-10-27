@@ -1,0 +1,14 @@
+# Finished reviews, served read-only (open-review host/20-web.sh).
+# Everything in a review comes from a module we treat as hostile: no scripts,
+# no frames, no forms, nothing loaded from elsewhere.
+:80 {
+	root * /srv/reviews
+	file_server browse
+	header {
+		Content-Security-Policy "default-src 'none'; img-src 'self'; media-src 'self'; style-src 'self' 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+	}
+	@jsonl path *.jsonl
+	header @jsonl Content-Type "application/x-ndjson; charset=utf-8"
+}

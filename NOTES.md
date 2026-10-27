@@ -34,3 +34,10 @@ A running log: newest last. What was done, why, and what was found.
   - credential until 2026-11-26: renew before then.
 - The firewall needed shrooms' ports, 51820/udp (WireGuard), 60000/tcp and 9000/udp (delivery), and the mesh interface `shrooms0` allowed in. The same deny-by-default trap that hid the Duet's agent.
 - Tunnel laptop ↔ openreview direct, about 35 ms.
+- **Publishing (PoC):** reviews are served from this host, at http://77.237.236.27/.
+  - Václav didn't want the review host pushing to data.vpavlin.xyz.
+  - A pull from there was more than a PoC needs.
+  - The cost: an escape lands next to the published reviews.
+- **Web server:** Caddy, read-only, and a CSP with no scripts, frames, forms or outside resources (`host/20-web.sh`).
+- **Anubis:** later, if traffic needs it, with `*.json` and `*.jsonl` exempt for tools.
+- **HTTPS** needs a DNS name; ask Václav when wanted.
