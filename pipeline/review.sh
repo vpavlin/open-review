@@ -10,7 +10,12 @@ BASECAMP=/home/reviewer/sandbox/Basecamp.AppImage
 REPO=${1:?repo url}; COMMIT=${2:-HEAD}; LGX=${3:-}
 slug=$(printf '%s-%s' "$(basename "$REPO" .git)" "${COMMIT:0:12}" | tr -c 'A-Za-z0-9._-' -)
 RUN=/home/reviewer/runs/$slug; rm -rf "$RUN"; mkdir -p "$RUN"/{src,checks,build,behaviour,media,logs}
-DEST=/srv/reviews/$slug; mkdir -p "$DEST"
+DEST=/srv/reviews/$slug
+# A review of the same commit again: the last one stays published beside it,
+# named for when it ran. Overwriting in place left the earlier run's report
+# showing on a run that never wrote one (forumer, 2026-10-27).
+if [ -e "$DEST/index.html" ]; then mv "$DEST" "$DEST-$(date -u -r "$DEST/index.html" +%Y%m%d-%H%M)"; fi
+rm -rf "$DEST"; mkdir -p "$DEST"
 log(){ printf '%s %s\n' "$(date -u +%H:%M:%S)" "$*" | tee -a "$RUN/logs/pipeline.log"; }
 live(){ printf '%s\n' "$*" >> "$RUN/live.txt"; "$HERE/render.py" "$RUN" "$DEST" "$slug" live >/dev/null 2>&1 || true; }
 inbox(){ podman run --rm --network "$1" -v "$RUN:/run:z" -w /run "$IMG" bash -lc "$2"; }
