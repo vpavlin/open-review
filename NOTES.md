@@ -62,4 +62,10 @@ A running log: newest last. What was done, why, and what was found.
 - `sandbox/bait.sh`: plants fake secrets (SSH key, AWS creds, Solana seed, Electrum wallet) with unique canary strings, logged to bait.json so a read or an exfil of one is a red finding.
 - `sandbox/record.sh`: strace across the process tree for file opens (and failures), connects and execs. Writes-outside-folder and the network capture are host-side (overlay diff, logging netns): next step.
 - **Design note:** the module under test should run in a container the *pipeline* launches with these flags (hostname, caps, write-overlay, logging netns), driven by the reviewer pi session — not the shrooms cage, which does not expose them. The reviewer agent orchestrates; the pipeline runs the disguised sandbox.
-- **Open for Václav:** his SSH public key (he lost root when password logins went off); his phone on the review mesh (one more invite) once there is a reviewer to talk to.
+- Access: the laptop only, no user key, no phone on the mesh (decided 2026-10-27).
+
+## 2026-10-27: trust-surface decisions (Václav)
+
+- **No phone on the review mesh.** Václav talks to the reviewer through the laptop session (me); I task the reviewer over the mesh. One fewer device with access.
+- **No SSH key for Václav on the host.** He reaches it via the laptop (me) or not at all. Only the laptop's `openreview_ed25519` key has shell access.
+- So the review mesh has two devices: the laptop and the host. The laptop tasks the reviewer agent over the mesh; nothing else talks to it.
