@@ -139,3 +139,20 @@ A running log: newest last. What was done, why, and what was found.
   so: master is the v0.2.5 tag plus two docs-only commits.
 - `review.sh` took an `.lgx` URL and ignored it; it now fetches it.
 - A hard time cap (REVIEW_MAX_MIN, default 150), shown in the report when hit.
+- **Venice outage, 17:38 UTC:** `deepseek-v4-1-flash-uncensored` answered
+  `500 Inference processing failed` to every request, tiny or large, while
+  its siblings answered on the same key; listed online, DIEM left (0.59 of 2
+  used, $0 USD). The auditor on proteus hit it too. pi gave up on the first
+  500 and run 2 published as if done, with no report.
+  - Fixed: the gateway retries 5xx/429 for ~25 min, then marks the run; a
+    run with that mark or no report is published as **failed**, not a
+    verdict either way (eece930, b905fa5). Both agents moved to
+    `deepseek-v4-1-flash-1017` (Václav's choice); `REVIEW_MODEL` sets it.
+- **The gateway never logged a reply.** pi streams; the gateway parsed the
+  body as one JSON document and logged `{}`: no replies, no usage, $0 in
+  the report. It now reassembles the stream (03aff47). Run 2 used 57 calls
+  but only ~10 min of model time in 2 h: the rest was compiling probes.
+- **Re-runs overwrote the published folder,** so run 2 showed run 1's
+  report. A re-run now moves the last one aside (7fc6f01).
+- **Run 3** started 17:48 UTC with the v0.2.5 `.lgx`, its dependencies,
+  desk, and the 1017 model.
