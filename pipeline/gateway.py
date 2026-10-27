@@ -7,6 +7,8 @@
 import os,sys,json,time,re,urllib.request,http.server,hashlib
 VENICE="https://api.venice.ai/api/v1/chat/completions"
 KEY=os.environ["VENICE_INFERENCE_KEY"]
+TOKEN=os.environ.get("REVIEW_TOKEN","")
+BIND=os.environ.get("GATEWAY_BIND","127.0.0.1")
 RUN=os.environ.get("REVIEW_RUN","/tmp")           # where to log this review
 PORT=int(os.environ.get("GATEWAY_PORT","7399"))
 SECRET=re.compile(r'(gh[pousr]_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|sk-[A-Za-z0-9]{20,}|xox[baprs]-[A-Za-z0-9-]{10,}|-----BEGIN[^-]+PRIVATE KEY-----|CANARY-[A-Za-z0-9]{12})')
@@ -18,6 +20,8 @@ def deep(o):
 class H(http.server.BaseHTTPRequestHandler):
     def log_message(self,*a): pass
     def do_POST(self):
+        if TOKEN and self.headers.get('Authorization','') != 'Bearer '+TOKEN:
+            self.send_response(403); self.end_headers(); self.wfile.write(b'{"error":"forbidden"}'); return
         body=self.rfile.read(int(self.headers.get('Content-Length',0)))
         try: req=json.loads(body)
         except Exception: req={}
@@ -44,4 +48,4 @@ class H(http.server.BaseHTTPRequestHandler):
         self.send_response(code); self.send_header('Content-Type','application/json'); self.end_headers()
         self.wfile.write(out)
 if __name__=="__main__":
-    http.server.ThreadingHTTPServer(('127.0.0.1',PORT),H).serve_forever()
+    http.server.ThreadingHTTPServer((BIND,PORT),H).serve_forever()

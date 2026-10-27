@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# The reviewer, INSIDE the disguised sandbox. It builds, runs, probes and writes
+# the report — all here, where running untrusted code is safe. Launched by
+# reviewer.sh with: the run dir at /run, the pipeline at /pipeline, Basecamp at
+# /opt/basecamp, --network bridge, --hostname/--cap-add for the disguise, and
+# the env GATEWAY_URL + REVIEW_TOKEN so pi can reach the model through the host
+# gateway (the Venice key never enters here).
+set -uo pipefail
+B=/run/behaviour; mkdir -p "$B" /run/media
+/usr/local/sbin/disguise.sh /usr/local/sbin/profiles.json "$B/disguise.json" >/dev/null 2>&1 || true
+/usr/local/sbin/bait.sh /root "$B/bait.json" >/dev/null 2>&1 || true
+python3 /pipeline/dns_sink.py "$B/dns.log" & SINK=$!
+
+# pi points at the host gateway; the key stays on the host, calls carry the token.
+GW="${GATEWAY_URL:-http://host.containers.internal:${GATEWAY_PORT}}"
+if ! curl -s -m3 -o /dev/null "$GW/" 2>/dev/null; then
+  g=$(ip route 2>/dev/null | awk '/default/{print $3; exit}')
+  [ -n "$g" ] && GW="http://$g:${GATEWAY_PORT}"
+fi
+export HOME=/root
+mkdir -p /root/.pi/agent
+cat > /root/.pi/agent/models.json <<JSON
+{"providers":{"venice":{"baseUrl":"${GW}","api":"openai-completions","apiKey":"${REVIEW_TOKEN}",
+ "models":[{"id":"deepseek-v4-1-flash-uncensored","name":"DeepSeek","contextWindow":1000000,"maxTokens":131072}]}}}
+JSON
+
+# The whole reviewer session is straced: its builds, its probes and anything the
+# module does when the reviewer runs it all land in one capture.
+cd /run/src 2>/dev/null || { echo '{"error":"no source"}' > "$B/summary.json"; kill $SINK 2>/dev/null; exit 0; }
+strace -f -qq -e trace=openat,open,connect,execve,unlinkat,unlink,rename -e signal=none -s 300 -o "$B/strace.log" \
+  pi --model venice/deepseek-v4-1-flash-uncensored -p "$(cat /pipeline/reviewer-prompt.md)" \
+  > /run/logs/session.txt 2>&1
+# pi wrote report.md/report.json into /run/src; move them up to the run root.
+for f in report.md report.json; do [ -f "/run/src/$f" ] && cp "/run/src/$f" "/run/$f"; done
+cp /run/logs/session.txt /run/session.log 2>/dev/null || true
+
+kill $SINK 2>/dev/null
+mkdir -p "$B"
+python3 /pipeline/analyse.py "$B" > "$B/summary.json" 2>"$B/analyse.err" || echo '{"error":"analyse"}' > "$B/summary.json"
+echo "sandboxed review: done"

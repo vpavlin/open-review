@@ -14,6 +14,22 @@ def readf(p,n=200000):
     except: return ""
 CSS="body{max-width:60em;margin:1.5em auto;padding:0 1em;font:15px/1.5 system-ui,sans-serif;background:#0d0f12;color:#d8dde3}a{color:#6cf}h1,h2{color:#9fe}pre{white-space:pre-wrap;word-break:break-word;background:#15181d;padding:.8em;border-radius:6px;overflow:auto}table{border-collapse:collapse}td,th{border:1px solid #333;padding:.3em .6em}.sev{font-weight:bold}.red{color:#f66}"
 def write(name,body): open(os.path.join(dest,name),"w").write(body)
+def usage_stats(run):
+    import glob
+    p=os.path.join(run,"gateway.jsonl")
+    calls=0; pin=0; pout=0; cached=0; ms=0
+    if os.path.exists(p):
+        for line in open(p,encoding="utf-8",errors="replace"):
+            try: r=json.loads(line)
+            except: continue
+            calls+=1; ms+=r.get("ms",0)
+            u=(r.get("response") or {}).get("usage") or {}
+            pin+=u.get("prompt_tokens",0); pout+=u.get("completion_tokens",0)
+            cached+=(u.get("prompt_tokens_details") or {}).get("cached_tokens",0)
+    # deepseek-v4-1-flash-uncensored (Venice): $0.33/M in, $1.32/M out, $0.00825/M cached
+    cost=((pin-cached)*0.33 + cached*0.00825 + pout*1.32)/1e6
+    return {"model_calls":calls,"input_tokens":pin,"cached_input_tokens":cached,"output_tokens":pout,
+            "model_seconds":round(ms/1000,1),"est_cost_usd":round(cost,4)}
 
 if mode=="live":
     t=readf("live.txt")
@@ -47,13 +63,24 @@ beh={}
 try: beh=json.load(open(os.path.join(run,"behaviour","summary.json")))
 except: pass
 repo=readf("logs/repo").strip(); commit=readf("logs/commit").strip()
-# findings table
+# findings table (richer schema)
 fr=""
 if rep and rep.get("findings"):
     for f in rep["findings"]:
         cl=" red" if str(f.get("severity","")).lower() in ("critical","high") else ""
-        fr+=f"<tr><td class='sev{cl}'>{esc(f.get('severity',''))}</td><td>{esc(f.get('title',''))}</td><td>{esc(f.get('evidence',''))}</td><td><code>{esc(f.get('file',''))}</code></td></tr>"
-findings=f"<table><tr><th>severity</th><th>finding</th><th>evidence</th><th>where</th></tr>{fr}</table>" if fr else "<p>No structured findings parsed; see report.md.</p>"
+        conf=esc(f.get("confirmed",""))
+        fr+=(f"<tr><td>{esc(f.get('id',''))}</td><td class='sev{cl}'>{esc(f.get('severity',''))}</td>"
+             f"<td>{esc(f.get('title',''))}</td><td>{conf}</td><td><code>{esc(f.get('files',f.get('file','')))}</code></td></tr>")
+findings=(f"<table><tr><th>id</th><th>severity</th><th>finding</th><th>confirmed</th><th>where</th></tr>{fr}</table>"
+          "<p>Full exploit and fix per finding in <a href='report.md'>report.md</a>.</p>") if fr else "<p>See <a href='report.md'>report.md</a>.</p>"
+U=usage_stats(run)
+usage=(f"<table><tr><th>model calls</th><td>{U['model_calls']}</td></tr>"
+       f"<tr><th>input tokens</th><td>{U['input_tokens']:,} ({U['cached_input_tokens']:,} cached)</td></tr>"
+       f"<tr><th>output tokens</th><td>{U['output_tokens']:,}</td></tr>"
+       f"<tr><th>model time</th><td>{U['model_seconds']} s</td></tr>"
+       f"<tr><th>estimated cost</th><td>${U['est_cost_usd']}</td></tr></table>")
+ran="".join(f"<li>{esc(x)}</li>" for x in (rep.get("ran") or [])[:30]) if rep else ""
+nottested="".join(f"<li>{esc(x)}</li>" for x in (rep.get("not_tested") or [])[:30]) if rep else ""
 behrow=""
 if beh.get("bait_files_read"): behrow+=f"<li class='red'>read bait: {esc(', '.join(beh['bait_files_read']))}</li>"
 if beh.get("contacted_hosts"): behrow+=f"<li>contacted: {esc(', '.join(beh['contacted_hosts']))}</li>"
@@ -69,6 +96,9 @@ write("index.html", f"""<!doctype html><meta charset=utf-8><meta name=viewport c
 {'<br><b class=red>The repository contained text addressed to the reviewer.</b>' if rep and rep.get('repo_tried_to_instruct_reviewer') else ''}</p>
 <p><b>Summary:</b> {esc(rep.get('verdict_summary','(see report.md)')) if rep else '(see report.md)'}</p>
 <h2>Findings</h2>{findings}
+<h2>Usage</h2>{usage}
+{ran and ('<h2>What was run</h2><ul>'+ran+'</ul>')}
+{nottested and ('<h2>Not tested</h2><ul>'+nottested+'</ul>')}
 <h2>Observed behaviour</h2><ul>{behrow or '<li>nothing flagged</li>'}</ul>
 <h2>Evidence</h2><ul>
 <li><a href="report.md">report.md</a> — the reviewer's full writeup</li>

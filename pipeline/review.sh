@@ -34,23 +34,16 @@ inbox bridge 'cd src
   true'
 for c in gitleaks osv semgrep; do [ -s "$RUN/checks/$c.json" ] && live "  $c: $(wc -c < "$RUN/checks/$c.json") bytes"; done
 
-live "## dynamic: build & run in the disguised sandbox, recording everything"; log "dynamic"
-BC_MNT=(); [ -x "$BASECAMP" ] && BC_MNT=(-v "$BASECAMP:/opt/basecamp/Basecamp.AppImage:ro")
-podman run --rm --hostname dell-xps --cap-add SYS_ADMIN --network bridge \
-  -v "$RUN:/run:z" -v "$HERE:/pipeline:ro" "${BC_MNT[@]}" "$IMG" \
-  bash /pipeline/dynamic.sh 2>&1 | tail -8 | tee -a "$RUN/logs/pipeline.log"
-python3 - "$RUN/behaviour/summary.json" <<'PY' | while read l; do live "  $l"; done
+live "## review: build, run and attack it in the sandbox (this is the work)"; log "sandboxed review"
+"$HERE/reviewer.sh" "$RUN" 2>&1 | tail -6 | tee -a "$RUN/logs/pipeline.log"
+python3 - "$RUN/behaviour/summary.json" <<'PY2' | while read l; do live "  $l"; done
 import json,sys
 try:
  d=json.load(open(sys.argv[1]))
- if d.get("bait_files_read"): print("BAIT READ: "+", ".join(d["bait_files_read"]))
- if d.get("contacted_hosts"): print("contacted: "+", ".join(d["contacted_hosts"]))
- if d.get("read_secret_then_contacted_external_host"): print("!! read a secret, then contacted an external host")
-except Exception as e: print("summary: "+str(e))
-PY
-
-live "## report: the reviewer reads the evidence"; log "report"
-"$HERE/report.sh" "$RUN" "$REPO" "$COMMIT" 2>&1 | tail -4 | tee -a "$RUN/logs/pipeline.log"
+ if d.get("bait_files_read"): print("bait read during review: "+", ".join(d["bait_files_read"]))
+ if d.get("contacted_hosts"): print("hosts contacted: "+", ".join(d["contacted_hosts"]))
+except Exception: pass
+PY2
 
 log "publish"; "$HERE/render.py" "$RUN" "$DEST" "$slug" final 2>&1 | tee -a "$RUN/logs/pipeline.log"
 log "done -> ${REVIEW_BASE:-http://REVIEW-HOST}/$slug/"

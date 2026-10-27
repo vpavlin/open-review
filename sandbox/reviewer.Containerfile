@@ -6,7 +6,13 @@
 # caged pi session (shrooms ADR-072), with no credentials and a network limited
 # to the model gateway and package mirrors.
 
-FROM docker.io/library/node:22-bookworm-slim AS reviewer
+FROM docker.io/library/ubuntu:24.04 AS reviewer
+ENV DEBIAN_FRONTEND=noninteractive
+# Node 22 (the AppImage needs a newer glibc than Debian bookworm shipped).
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl gnupg \
+    && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && rm -rf /var/lib/apt/lists/*
 
 # Build, read and run tools.
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -25,12 +31,14 @@ RUN npm install -g @earendil-works/pi-coding-agent@1.4.0 && npm cache clean --fo
 RUN apt-get update && apt-get install -y --no-install-recommends \
         xvfb xauth xdotool x11-utils x11-xserver-utils imagemagick ffmpeg \
         fonts-dejavu-core fonts-noto-core fonts-noto-color-emoji \
-        libgl1 libegl1 libopengl0 libglib2.0-0 libfontconfig1 libfreetype6 libdbus-1-3 libnss3 libasound2 \
+        libgl1 libegl1 libopengl0 libglib2.0-0 libfontconfig1 libfreetype6 libdbus-1-3 libnss3 libasound2t64 \
         libxkbcommon0 libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \
         libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-xinerama0 libxcb-xkb1 libxcb-xfixes0 \
         libx11-xcb1 libxrender1 libxi6 libxcomposite1 libxdamage1 libxrandr2 libxtst6 libsm6 libice6 \
+        libgl1-mesa-dri libglx-mesa0 libglu1-mesa mesa-utils fuse3 \
     && rm -rf /var/lib/apt/lists/*
-ENV APPIMAGE_EXTRACT_AND_RUN=1
+# Software GL, so Qt/Basecamp render with no GPU; a Qt software fallback too.
+ENV APPIMAGE_EXTRACT_AND_RUN=1 LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe QT_QUICK_BACKEND=software QTWEBENGINE_DISABLE_SANDBOX=1
 
 # Static review checks: secrets, dependency vulnerabilities, code patterns.
 # gitleaks and osv-scanner as pinned release binaries; semgrep via pipx.
