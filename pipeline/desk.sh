@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+# desk: the reviewer's desktop inside the sandbox. A screen the size of the
+# disguised laptop's panel, Basecamp on it, a recorder for the whole session,
+# and a text view of the screen, since the review model cannot see images.
+#
+#   desk start                 screen + recorder + Basecamp (empty user dir)
+#   desk install <file.lgx>    install a module the way lgpm does, restart Basecamp
+#   desk restart               restart Basecamp (same user dir)
+#   desk read                  the words on screen, with the x,y to click them
+#   desk click <x> <y>         left click
+#   desk click-text <text>     click the first on-screen word/phrase matching text
+#   desk type <text>           type text into the focused field
+#   desk key <keys>            xdotool key names, e.g. Return, ctrl+k, Escape
+#   desk shot <name>           screenshot to /run/media/NN-<name>.png
+#   desk log [n]               the last n lines of Basecamp's log (default 40)
+#   desk stop                  stop Basecamp and finalise the video
+#
+# Screenshots and the video are published with the report; take a shot at
+# every step that shows something, named for what it shows.
+set -uo pipefail
+S=/run/desk; M=/run/media; U=/root/.local/share/Logos/LogosBasecamp
+mkdir -p "$S" "$M"
+export DISPLAY=:99 QT_QPA_PLATFORM=xcb WAYLAND_DISPLAY= QT_FORCE_STDERR_LOGGING=1
+res=$(jq -r '.res // empty' /run/behaviour/disguise.json 2>/dev/null); res=${res:-1920x1200}
+W=${res%x*}; H=${res#*x}
+
+bc_up() {
+  [ -d /opt/bc/squashfs-root ] || { mkdir -p /opt/bc && cd /opt/bc && /opt/basecamp/Basecamp.AppImage --appimage-extract >/dev/null 2>&1; cd - >/dev/null; }
+  mkdir -p "$U/modules" "$U/plugins"
+  ( cd /root && exec /opt/bc/squashfs-root/AppRun --user-dir "$U" >>"$M/basecamp.log" 2>&1 ) &
+  echo $! > "$S/bc.pid"
+  # Basecamp is up when its window is mapped; give its modules a moment more.
+  for _ in $(seq 1 90); do xdotool search --name Basecamp >/dev/null 2>&1 && break; sleep 1; done
+  sleep 8
+  wid=$(xdotool search --name Basecamp 2>/dev/null | head -1)
+  [ -n "$wid" ] && xdotool windowsize "$wid" "$W" "$H" windowmove "$wid" 0 0 2>/dev/null
+  sleep 1
+}
+bc_down() {
+  [ -f "$S/bc.pid" ] || return 0
+  pkill -TERM -f '/opt/bc/squashfs-root' 2>/dev/null; sleep 3
+  pkill -KILL -f '/opt/bc/squashfs-root' 2>/dev/null; rm -f "$S/bc.pid"
+}
+nextshot() { n=$(ls "$M"/*.png 2>/dev/null | wc -l); printf '%02d' $((n+1)); }
+ocr() {  # one line per text line on screen: "x,y  text" (x,y = its centre)
+  f="$S/ocr.png"
+  ffmpeg -loglevel error -y -f x11grab -video_size "${W}x${H}" -i :99 -frames:v 1 "$f" || return 1
+  # Basecamp is light text on dark: grey, invert and double it for tesseract.
+  convert "$f" -colorspace Gray -negate -resize 200% "$S/ocr2.png" 2>/dev/null || cp "$f" "$S/ocr2.png"
+  tesseract "$S/ocr2.png" - --psm 11 tsv 2>/dev/null | awk -F'\t' 'NR>1 && $12!="" && $11>40 {
+      k=$3"-"$4"-"$5; if(!(k in t)){t[k]=$12; l[k]=$7; tp[k]=$8; r[k]=$7+$9; b[k]=$8+$10; o[++n]=k}
+      else {t[k]=t[k]" "$12; if($7+$9>r[k])r[k]=$7+$9; if($8+$10>b[k])b[k]=$8+$10}
+    } END {for(i=1;i<=n;i++){k=o[i]; printf "%d,%d\t%s\n", (l[k]+r[k])/4, (tp[k]+b[k])/4, t[k]}}'
+}
+
+case "${1:-}" in
+  start)
+    Xvfb :99 -screen 0 "${res}x24" -nolisten tcp >/dev/null 2>&1 & echo $! > "$S/xvfb.pid"; sleep 2
+    ffmpeg -nostdin -loglevel error -f x11grab -framerate 4 -video_size "${W}x${H}" -i :99 \
+      -c:v libx264 -preset veryfast -crf 32 -pix_fmt yuv420p -movflags +faststart "$M/session.mp4" \
+      >/dev/null 2>"$S/ffmpeg.err" & echo $! > "$S/ffmpeg.pid"
+    bc_up; echo "desk: ${res} screen, Basecamp up, recording to media/session.mp4"; ocr | head -40 ;;
+  install)
+    lgx=${2:?desk install <file.lgx>}; t=$(mktemp -d)
+    tar xzf "$lgx" -C "$t" || { echo "desk: not an lgx (gzip tar)"; exit 1; }
+    name=$(jq -r .name "$t/manifest.json"); type=$(jq -r .type "$t/manifest.json")
+    case "$type" in ui_qml|ui) dest="$U/plugins/$name";; *) dest="$U/modules/$name";; esac
+    [ -d "$t/variants/linux-amd64" ] || { echo "desk: no linux-amd64 variant in $lgx"; exit 1; }
+    bc_down; rm -rf "$dest"; mkdir -p "$dest"
+    cp -a "$t/variants/linux-amd64/." "$dest/"; cp "$t/manifest.json" "$dest/"
+    [ -d "$t/assets" ] && cp -an "$t/assets/." "$dest/" 2>/dev/null
+    echo linux-amd64 > "$dest/variant"
+    echo "desk: installed $name ($type) $(jq -r .version "$t/manifest.json") -> $dest"
+    echo "desk: sha256 $(sha256sum "$lgx" | cut -c1-64)"
+    rm -rf "$t"; bc_up; ocr | head -40 ;;
+  restart) bc_down; bc_up; ocr | head -40 ;;
+  read) ocr ;;
+  click) xdotool mousemove "$2" "$3" click 1; sleep 1.5 ;;
+  click-text)
+    want=${2:?desk click-text <text>}
+    hit=$(ocr | awk -F'\t' -v w="$want" 'BEGIN{w=tolower(w)} index(tolower($2),w){print $1; exit}')
+    [ -n "$hit" ] || { echo "desk: \"$want\" not on screen"; exit 1; }
+    xdotool mousemove "${hit%,*}" "${hit#*,}" click 1; sleep 1.5; echo "desk: clicked \"$want\" at $hit" ;;
+  type) xdotool type --delay 40 -- "$2"; sleep 0.5 ;;
+  key) shift; xdotool key "$@"; sleep 1 ;;
+  shot)
+    f="$M/$(nextshot)-${2:-screen}.png"
+    ffmpeg -loglevel error -y -f x11grab -video_size "${W}x${H}" -i :99 -frames:v 1 "$f" && echo "desk: $f" ;;
+  log) tail -n "${2:-40}" "$M/basecamp.log" ;;
+  stop)
+    bc_down
+    if [ -f "$S/ffmpeg.pid" ]; then
+      p=$(cat "$S/ffmpeg.pid"); kill -INT "$p" 2>/dev/null
+      # ffmpeg writes the index on SIGINT; killed harder, the mp4 won't play.
+      for _ in $(seq 1 60); do kill -0 "$p" 2>/dev/null || break; sleep 0.5; done
+      kill -9 "$p" 2>/dev/null; rm -f "$S/ffmpeg.pid"
+    fi
+    [ -f "$S/xvfb.pid" ] && kill "$(cat "$S/xvfb.pid")" 2>/dev/null; rm -f "$S/xvfb.pid"
+    echo "desk: stopped" ;;
+  *) sed -n '2,20p' "$0" ;;
+esac

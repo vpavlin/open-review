@@ -29,7 +29,7 @@ RUN npm install -g @earendil-works/pi-coding-agent@1.4.0 && npm cache clean --fo
 # ImageMagick to record, and the libraries Qt apps load. AppImages self-extract
 # (no FUSE in a cage).
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        xvfb xauth xdotool x11-utils x11-xserver-utils imagemagick ffmpeg \
+        xvfb xauth xdotool x11-utils x11-xserver-utils imagemagick ffmpeg tesseract-ocr \
         fonts-dejavu-core fonts-noto-core fonts-noto-color-emoji \
         libgl1 libegl1 libopengl0 libglib2.0-0 libfontconfig1 libfreetype6 libdbus-1-3 libnss3 libasound2t64 \
         libxkbcommon0 libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \

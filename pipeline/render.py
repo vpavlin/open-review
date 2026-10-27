@@ -32,11 +32,17 @@ def usage_stats(run):
             "model_seconds":round(ms/1000,1),"est_cost_usd":round(cost,4)}
 
 if mode=="live":
+    def latest_shot():
+        shots=sorted(glob.glob(os.path.join(run,"media","*.png")))
+        if not shots: return ""
+        os.makedirs(os.path.join(dest,"media"),exist_ok=True)
+        f=os.path.basename(shots[-1]); shutil.copy(shots[-1],os.path.join(dest,"media",f))
+        return f"<p><b>latest screen:</b> {esc(f[3:-4])}<br><img src='media/{esc(f)}' style='max-width:100%;border:1px solid #333'></p>"
     t=readf("live.txt")
     write("live.html", f"""<!doctype html><meta charset=utf-8><meta http-equiv=refresh content=3>
 <meta name=viewport content='width=device-width,initial-scale=1'><title>reviewing {esc(slug)}…</title>
 <style>{CSS}</style><h1>Reviewing {esc(slug)}</h1>
-<p style='color:#fa0'>● live — this page refreshes every 3s</p><pre>{esc(t)}</pre>""")
+<p style='color:#fa0'>● live — this page refreshes every 3s</p>{latest_shot()}<pre>{esc(t)}</pre>""")
     sys.exit(0)
 
 # final: copy raw evidence (served as text/json, never html)
@@ -55,6 +61,17 @@ prev=""
 for p in sorted(glob.glob(run+'/**/*',recursive=True)):
     if os.path.isfile(p): prev=hashlib.sha256((prev+h(p)).encode()).hexdigest()
 write("chain.txt",prev+"\n")
+def media_html():
+    md=os.path.join(run,"media"); out=[]
+    if os.path.exists(os.path.join(md,"session.mp4")):
+        out.append("<video controls preload=metadata src='media/session.mp4' style='max-width:100%'></video>"
+                   "<p style='color:#888'>The whole session in Basecamp, recorded in the sandbox.</p>")
+    for f in sorted(glob.glob(os.path.join(md,"*.png"))):
+        b=os.path.basename(f); cap=b[3:-4].replace("-"," ") if b[:2].isdigit() else b[:-4]
+        out.append(f"<figure><img src='media/{esc(b)}' style='max-width:100%;border:1px solid #333'><figcaption>{esc(cap)}</figcaption></figure>")
+    note=os.path.join(md,"GUI-did-not-run.txt")
+    if os.path.exists(note): out.append("<pre>"+esc(open(note).read())+"</pre>")
+    return ("<h2>Screenshots and recording</h2>"+"".join(out)) if out else ""
 rep=None
 try: rep=json.load(open(os.path.join(run,"report.json")))
 except: pass
@@ -96,6 +113,7 @@ write("index.html", f"""<!doctype html><meta charset=utf-8><meta name=viewport c
 {'<br><b class=red>The repository contained text addressed to the reviewer.</b>' if rep and rep.get('repo_tried_to_instruct_reviewer') else ''}</p>
 <p><b>Summary:</b> {esc(rep.get('verdict_summary','(see report.md)')) if rep else '(see report.md)'}</p>
 <h2>Findings</h2>{findings}
+{media_html()}
 <h2>Usage</h2>{usage}
 {ran and ('<h2>What was run</h2><ul>'+ran+'</ul>')}
 {nottested and ('<h2>Not tested</h2><ul>'+nottested+'</ul>')}

@@ -26,6 +26,16 @@ inbox bridge "git clone --quiet --filter=blob:none '$REPO' src 2>&1 | tail -3; c
 fi
 echo "$REPO" > "$RUN/logs/repo"
 
+# The published package, if there is one: the reviewer installs this into
+# Basecamp, so what is tested is what users install.
+if [ -n "$LGX" ]; then
+  live "## fetch the published package"; log "lgx $LGX"
+  mkdir -p "$RUN/lgx"
+  inbox bridge "curl -sSfL --max-time 300 -o 'lgx/$(basename "$LGX")' '$LGX' && sha256sum lgx/*.lgx > logs/lgx.sha256" \
+    || live "  could not download $LGX"
+  [ -s "$RUN/logs/lgx.sha256" ] && live "  $(cat "$RUN/logs/lgx.sha256")"
+fi
+
 live "## static checks (gitleaks, osv-scanner, semgrep)"; log "static"
 inbox bridge 'cd src
   gitleaks detect --no-banner --report-format json --report-path /run/checks/gitleaks.json . >/dev/null 2>&1 || true

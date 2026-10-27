@@ -11,6 +11,9 @@ B=/run/behaviour; mkdir -p "$B" /run/media
 /usr/local/sbin/bait.sh /root "$B/bait.json" >/dev/null 2>&1 || true
 python3 /pipeline/dns_sink.py "$B/dns.log" & SINK=$!
 
+# The reviewer's desktop: a screen, Basecamp and a recorder (see desk.sh).
+ln -sf /pipeline/desk.sh /usr/local/bin/desk
+
 # pi points at the host gateway; the key stays on the host, calls carry the token.
 GW="${GATEWAY_URL:-http://host.containers.internal:${GATEWAY_PORT}}"
 if ! curl -s -m3 -o /dev/null "$GW/" 2>/dev/null; then
@@ -33,6 +36,23 @@ strace -f -qq -e trace=openat,open,connect,execve,unlinkat,unlink,rename -e sign
 # pi wrote report.md/report.json into /run/src; move them up to the run root.
 for f in report.md report.json; do [ -f "/run/src/$f" ] && cp "/run/src/$f" "/run/$f"; done
 cp /run/logs/session.txt /run/session.log 2>/dev/null || true
+
+# Finalise the video whatever the reviewer did, then keep only real evidence:
+# a screenshot of a black screen or a video of nothing is not shown.
+desk stop >/dev/null 2>&1 || true
+for f in /run/media/*.png; do
+  [ -f "$f" ] || continue
+  colours=$(convert "$f" -format %k info: 2>/dev/null || echo 0)
+  [ "${colours:-0}" -lt 16 ] && rm -f "$f"
+done
+mp4=$(stat -c%s /run/media/session.mp4 2>/dev/null || echo 0)
+if [ "$mp4" -gt 0 ] && ! ffprobe -v error -show_entries format=duration -of csv=p=0 /run/media/session.mp4 >/dev/null 2>&1; then
+  rm -f /run/media/session.mp4
+fi
+if ! ls /run/media/*.png /run/media/session.mp4 >/dev/null 2>&1; then
+  { echo "No screenshot or video: the reviewer did not get Basecamp to show the module."
+    echo "Last lines of basecamp.log:"; echo; tail -8 /run/media/basecamp.log 2>/dev/null; } > /run/media/GUI-did-not-run.txt
+fi
 
 kill $SINK 2>/dev/null
 mkdir -p "$B"
