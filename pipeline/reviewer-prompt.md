@@ -25,6 +25,15 @@ Your working directory has:
    input, a symlink, a poisoned dependency, an injection — put the probe in a `probes/`
    dir and run it. Confirm or refute. Tag each finding `[run]` (reproduced here),
    `[read]` (from code, not run), or `needs device/network`.
+
+   **Build the code under test once, link probes against it.** Compile the
+   module's sources a single time into a library (`cmake -B build -G Ninja
+   -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -g -O1"` then `ninja -C build`,
+   or `g++ -c` every source with `-j$(nproc)`-style parallelism into `objs/` and
+   `ar rcs libcore.a`), then build each probe as one small file linked to it.
+   Recompiling every source for every probe costs minutes per attempt; linking
+   costs seconds. Use all cores (`nproc`). Check a probe compiles against the
+   headers before adding the next one.
 4. **Be exhaustive.** A real audit of a module this size finds many issues. Keep going
    until you have covered every surface. Low-severity and hardening issues count.
 
