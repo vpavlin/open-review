@@ -48,11 +48,44 @@ if mode=="live":
         os.makedirs(os.path.join(dest,"media"),exist_ok=True)
         f=os.path.basename(shots[-1]); shutil.copy(shots[-1],os.path.join(dest,"media",f))
         return f"<p><b>latest screen:</b> {esc(f[3:-4])}<br><img src='media/{esc(f)}' style='max-width:100%;border:1px solid #333'></p>"
+    def last_line(path):
+        # gateway.jsonl carries the whole conversation in every request and
+        # runs to tens of MB; the status needs only its last line.
+        try:
+            with open(path,"rb") as f:
+                f.seek(0,2); end=f.tell(); step=1<<16; pos=end; buf=b""
+                while pos>0:
+                    pos=max(0,pos-step); f.seek(pos); buf=f.read(end-pos)
+                    if buf.rstrip(b"\n").count(b"\n")>=1: break
+                return buf.rstrip(b"\n").split(b"\n")[-1].decode("utf-8","replace")
+        except Exception: return ""
+    def status():
+        pl=readf(os.path.join("logs","pipeline.log")).strip().splitlines()
+        started=pl[0][:8] if pl else ""
+        stages=[l[9:].split()[0] if l[9:].startswith("lgx ") else l[9:] for l in pl if not l[9:].startswith("review ")]
+        gw=os.path.join(run,"gateway.jsonl"); calls=0; ctx=""
+        if os.path.exists(gw):
+            with open(gw,"rb") as f: calls=sum(1 for _ in f)
+            try:
+                r=(json.loads(last_line(gw)).get("response") or {})
+                ctx=f" · context {((r.get('usage') or {}).get('prompt_tokens') or 0):,} tokens"
+            except Exception: pass
+        return (f"<p>started {esc(started)} UTC · now {time.strftime('%H:%M:%S',time.gmtime())} UTC · "
+                f"{calls} model calls{ctx} · model {esc(MODEL)}</p>"
+                f"<p style='color:#888'>stages: {esc(' → '.join(stages))}</p>")
+    # The newest few steps, newest first: the page refreshes every 3 s and
+    # lands at the top, where a full log put the latest step at the far end.
     t=readf("live.txt")
+    steps=[x for x in t.split("\n▶ ") if x.strip()]
+    shown="".join(f"<pre>{esc(('▶ ' if i or len(steps)>1 else '')+x.strip()[:2500])}</pre>"
+                  for i,x in enumerate(reversed(steps[-6:])))
+    try: shutil.copy(os.path.join(run,"live.txt"),os.path.join(dest,"live.txt"))
+    except Exception: pass
     write("live.html", f"""<!doctype html><meta charset=utf-8><meta http-equiv=refresh content=3>
 <meta name=viewport content='width=device-width,initial-scale=1'><title>reviewing {esc(slug)}…</title>
 <style>{CSS}</style><h1>Reviewing {esc(slug)}</h1>
-<p style='color:#fa0'>● live — this page refreshes every 3s</p>{latest_shot()}<pre>{esc(t)}</pre>""")
+<p style='color:#fa0'>● live — refreshes every 3 s; newest first · <a href="live.txt">full log</a></p>
+{status()}{latest_shot()}<h2>Latest steps</h2>{shown}""")
     sys.exit(0)
 
 # final: copy raw evidence (served as text/json, never html)
