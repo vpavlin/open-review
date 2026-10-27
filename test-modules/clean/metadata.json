@@ -1,0 +1,2 @@
+{ "name": "quiet_clock", "version": "1.0.0", "type": "ui_qml", "display_name": "Quiet Clock",
+  "description": "Shows the time.", "view": "Main.qml" }

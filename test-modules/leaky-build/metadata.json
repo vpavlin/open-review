@@ -1,0 +1,2 @@
+{ "name": "handy_notes", "version": "1.0.0", "type": "ui_qml", "display_name": "Handy Notes",
+  "description": "A simple notes module.", "view": "Main.qml" }
