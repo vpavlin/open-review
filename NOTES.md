@@ -41,3 +41,9 @@ A running log: newest last. What was done, why, and what was found.
 - **Web server:** Caddy, read-only, and a CSP with no scripts, frames, forms or outside resources (`host/20-web.sh`).
 - **Anubis:** later, if traffic needs it, with `*.json` and `*.jsonl` exempt for tools.
 - **HTTPS** needs a DNS name; ask Václav when wanted.
+- **Agent (`host/30-agent.sh`):**
+  - shrooms-agent runs as the unprivileged user `reviewer`, with lingering on, listening only on the review mesh address.
+  - pi 1.4.0 on Node 22.
+  - Venice: a key of its own for open review, with a spend limit. Václav typed it on this host; it lives in `/home/reviewer/.pi/agent/.env` (mode 600). `models.json` names it as `$VENICE_INFERENCE_KEY`.
+  - First call through pi with `venice/deepseek-v4-1-flash-uncensored` answered.
+  - Václav lost root SSH when password logins went off; he needs his public key added.

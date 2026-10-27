@@ -1,0 +1,45 @@
+{
+  "providers": {
+    "venice": {
+      "baseUrl": "https://api.venice.ai/api/v1",
+      "api": "openai-completions",
+      "apiKey": "$VENICE_INFERENCE_KEY",
+      "models": [
+        {
+          "id": "deepseek-v4-1-flash-1017",
+          "name": "DeepSeek V4.1 Flash 1017 (Venice)",
+          "reasoning": true,
+          "input": [
+            "text",
+            "image"
+          ],
+          "contextWindow": 1000000,
+          "maxTokens": 131072,
+          "cost": {
+            "input": 0.3,
+            "output": 1.2,
+            "cacheRead": 0.0075,
+            "cacheWrite": 0
+          }
+        },
+        {
+          "id": "deepseek-v4-1-flash-uncensored",
+          "name": "DeepSeek V4.1 Flash Uncensored (Venice)",
+          "reasoning": true,
+          "input": [
+            "text",
+            "image"
+          ],
+          "contextWindow": 1000000,
+          "maxTokens": 131072,
+          "cost": {
+            "input": 0.33,
+            "output": 1.32,
+            "cacheRead": 0.00825,
+            "cacheWrite": 0
+          }
+        }
+      ]
+    }
+  }
+}
