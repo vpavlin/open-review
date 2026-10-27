@@ -16,7 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 
 # Build, read and run tools.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        git curl ca-certificates openssh-client build-essential pkg-config \
+        git curl ca-certificates openssh-client build-essential pkg-config cmake ninja-build \
         python3 python3-pip python3-venv pipx \
         ripgrep jq less procps psmisc unzip xz-utils file \
         strace ltrace \
