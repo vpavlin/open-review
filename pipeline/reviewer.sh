@@ -18,7 +18,7 @@ for i in $(seq 1 30); do curl -s -m1 -o /dev/null "http://127.0.0.1:$PORT/" && b
 ( while kill -0 $GW 2>/dev/null; do "$HERE/render.py" "$RUN" "$DEST" "$slug" live >/dev/null 2>&1; sleep 3; done ) & LV=$!
 BC_MNT=(); [ -x "$BASECAMP" ] && BC_MNT=(-v "$BASECAMP:/opt/basecamp/Basecamp.AppImage:ro")
 timeout 2400 podman run --rm --hostname dell-xps --cap-add SYS_ADMIN --network bridge \
-  -e GATEWAY_PORT="$PORT" -e GATEWAY_URL="http://host.containers.internal:$PORT" -e REVIEW_TOKEN="$TOKEN" \
+  -e GATEWAY_PORT="$PORT" -e GATEWAY_URL="http://host.containers.internal:$PORT" -e REVIEW_TOKEN="$TOKEN" -e REVIEW_MAX_MIN="${REVIEW_MAX_MIN:-150}" \
   -v "$RUN:/run:z" -v "$HERE:/pipeline:ro" "${BC_MNT[@]}" "$IMG" \
   bash /pipeline/review-in-sandbox.sh 2>&1 | tail -6
 kill $GW $LV 2>/dev/null; sleep 1

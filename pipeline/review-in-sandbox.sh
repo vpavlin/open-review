@@ -30,9 +30,14 @@ JSON
 # The whole reviewer session is straced: its builds, its probes and anything the
 # module does when the reviewer runs it all land in one capture.
 cd /run/src 2>/dev/null || { echo '{"error":"no source"}' > "$B/summary.json"; kill $SINK 2>/dev/null; exit 0; }
+# A hard cap on the review's time (the proposal's promise); a run that hits
+# it is published with what it has and says so.
+MAX_MIN=${REVIEW_MAX_MIN:-150}
 strace -f -qq -e trace=openat,open,connect,execve,unlinkat,unlink,rename -e signal=none -s 300 -o "$B/strace.log" \
-  pi --model venice/deepseek-v4-1-flash-uncensored -p "$(cat /pipeline/reviewer-prompt.md)" \
+  timeout --kill-after=60 "${MAX_MIN}m" pi --model venice/deepseek-v4-1-flash-uncensored -p "$(cat /pipeline/reviewer-prompt.md)" \
   > /run/logs/session.txt 2>&1
+rc=$?
+[ "$rc" = 124 ] && echo "The review hit its ${MAX_MIN}-minute limit and was stopped; what it found by then is below." > /run/logs/timed-out.txt
 # pi wrote report.md/report.json into /run/src; move them up to the run root.
 for f in report.md report.json; do [ -f "/run/src/$f" ] && cp "/run/src/$f" "/run/$f"; done
 cp /run/logs/session.txt /run/session.log 2>/dev/null || true

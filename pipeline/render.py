@@ -110,6 +110,7 @@ write("index.html", f"""<!doctype html><meta charset=utf-8><meta name=viewport c
 <p><b>Repository:</b> <code>{esc(repo)}</code> @ <code>{esc(commit)}</code><br>
 <b>When:</b> {esc(time.strftime('%Y-%m-%d %H:%M UTC',time.gmtime()))} · <b>Model:</b> venice/deepseek-v4-1-flash-uncensored<br>
 <b>Sandbox:</b> container dressed as a laptop; the host kernel is not hidden.
+{('<br><b class=red>'+esc(readf(os.path.join('logs','timed-out.txt')))+'</b>') if os.path.exists(os.path.join(run,'logs','timed-out.txt')) else ''}
 {'<br><b class=red>The repository contained text addressed to the reviewer.</b>' if rep and rep.get('repo_tried_to_instruct_reviewer') else ''}</p>
 <p><b>Summary:</b> {esc(rep.get('verdict_summary','(see report.md)')) if rep else '(see report.md)'}</p>
 <h2>Findings</h2>{findings}
