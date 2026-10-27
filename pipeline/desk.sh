@@ -30,10 +30,13 @@ bc_up() {
   ( cd /root && exec /opt/bc/squashfs-root/AppRun --user-dir "$U" >>"$M/basecamp.log" 2>&1 ) &
   echo $! > "$S/bc.pid"
   # Basecamp is up when its window is mapped; give its modules a moment more.
-  for _ in $(seq 1 90); do xdotool search --name Basecamp >/dev/null 2>&1 && break; sleep 1; done
+  for _ in $(seq 1 90); do xdotool search --onlyvisible --name Basecamp >/dev/null 2>&1 && break; sleep 1; done
   sleep 8
-  wid=$(xdotool search --name Basecamp 2>/dev/null | head -1)
-  [ -n "$wid" ] && xdotool windowsize "$wid" "$W" "$H" windowmove "$wid" 0 0 2>/dev/null
+  # Fill the laptop's panel; Basecamp opens at 1600x900. There is no window
+  # manager, so only the visible window takes the size.
+  for wid in $(xdotool search --onlyvisible --name Basecamp 2>/dev/null); do
+    xdotool windowmove "$wid" 0 0 windowsize "$wid" "$W" "$H" 2>/dev/null
+  done
   sleep 1
 }
 bc_down() {
@@ -41,16 +44,32 @@ bc_down() {
   pkill -TERM -f '/opt/bc/squashfs-root' 2>/dev/null; sleep 3
   pkill -KILL -f '/opt/bc/squashfs-root' 2>/dev/null; rm -f "$S/bc.pid"
 }
+install_one() {  # unpack one .lgx the way lgpm does
+  local lgx=$1 t name type dest
+  t=$(mktemp -d)
+  tar xzf "$lgx" -C "$t" || { echo "desk: $lgx is not an lgx (gzip tar)"; rm -rf "$t"; return 1; }
+  name=$(jq -r .name "$t/manifest.json"); type=$(jq -r .type "$t/manifest.json")
+  case "$type" in ui_qml|ui) dest="$U/plugins/$name";; *) dest="$U/modules/$name";; esac
+  [ -d "$t/variants/linux-amd64" ] || { echo "desk: no linux-amd64 variant in $lgx"; rm -rf "$t"; return 1; }
+  rm -rf "$dest"; mkdir -p "$dest"
+  cp -a "$t/variants/linux-amd64/." "$dest/"; cp "$t/manifest.json" "$dest/"
+  [ -d "$t/assets" ] && cp -an "$t/assets/." "$dest/" 2>/dev/null
+  echo linux-amd64 > "$dest/variant"
+  echo "desk: installed $name ($type) $(jq -r .version "$t/manifest.json"), sha256 $(sha256sum "$lgx" | cut -c1-16)…"
+  rm -rf "$t"
+}
 nextshot() { n=$(ls "$M"/*.png 2>/dev/null | wc -l); printf '%02d' $((n+1)); }
 ocr() {  # one line per text line on screen: "x,y  text" (x,y = its centre)
   f="$S/ocr.png"
   ffmpeg -loglevel error -y -f x11grab -video_size "${W}x${H}" -i :99 -frames:v 1 "$f" || return 1
-  # Basecamp is light text on dark: grey, invert and double it for tesseract.
-  convert "$f" -colorspace Gray -negate -resize 200% "$S/ocr2.png" 2>/dev/null || cp "$f" "$S/ocr2.png"
+  # Basecamp is light text on dark. Inverted grey alone gives tesseract
+  # nothing at all (tried 2026-10-27); tripled and contrast-stretched it reads
+  # every label but the smallest.
+  convert "$f" -alpha off -colorspace Gray -negate -resize 300% -depth 8 -level 10%,80% "$S/ocr2.png" 2>/dev/null || cp "$f" "$S/ocr2.png"
   tesseract "$S/ocr2.png" - --psm 11 tsv 2>/dev/null | awk -F'\t' 'NR>1 && $12!="" && $11>40 {
       k=$3"-"$4"-"$5; if(!(k in t)){t[k]=$12; l[k]=$7; tp[k]=$8; r[k]=$7+$9; b[k]=$8+$10; o[++n]=k}
       else {t[k]=t[k]" "$12; if($7+$9>r[k])r[k]=$7+$9; if($8+$10>b[k])b[k]=$8+$10}
-    } END {for(i=1;i<=n;i++){k=o[i]; printf "%d,%d\t%s\n", (l[k]+r[k])/4, (tp[k]+b[k])/4, t[k]}}'
+    } END {for(i=1;i<=n;i++){k=o[i]; printf "%d,%d\t%s\n", (l[k]+r[k])/6, (tp[k]+b[k])/6, t[k]}}'
 }
 
 case "${1:-}" in
@@ -61,18 +80,20 @@ case "${1:-}" in
       >/dev/null 2>"$S/ffmpeg.err" & echo $! > "$S/ffmpeg.pid"
     bc_up; echo "desk: ${res} screen, Basecamp up, recording to media/session.mp4"; ocr | head -40 ;;
   install)
-    lgx=${2:?desk install <file.lgx>}; t=$(mktemp -d)
-    tar xzf "$lgx" -C "$t" || { echo "desk: not an lgx (gzip tar)"; exit 1; }
-    name=$(jq -r .name "$t/manifest.json"); type=$(jq -r .type "$t/manifest.json")
-    case "$type" in ui_qml|ui) dest="$U/plugins/$name";; *) dest="$U/modules/$name";; esac
-    [ -d "$t/variants/linux-amd64" ] || { echo "desk: no linux-amd64 variant in $lgx"; exit 1; }
-    bc_down; rm -rf "$dest"; mkdir -p "$dest"
-    cp -a "$t/variants/linux-amd64/." "$dest/"; cp "$t/manifest.json" "$dest/"
-    [ -d "$t/assets" ] && cp -an "$t/assets/." "$dest/" 2>/dev/null
-    echo linux-amd64 > "$dest/variant"
-    echo "desk: installed $name ($type) $(jq -r .version "$t/manifest.json") -> $dest"
-    echo "desk: sha256 $(sha256sum "$lgx" | cut -c1-64)"
-    rm -rf "$t"; bc_up; ocr | head -40 ;;
+    lgx=${2:?desk install <file.lgx>}
+    bc_down
+    # Its dependencies first, as Basecamp's own install does; the pipeline
+    # fetched them from the official catalogue into /run/lgx/deps.
+    for d in /run/lgx/deps/*.lgx; do
+      [ -f "$d" ] || continue
+      n=$(tar xzOf "$d" manifest.json 2>/dev/null | jq -r .name)
+      if [ -d "/opt/bc/squashfs-root/usr/modules/$n" ] || [ -d "/opt/bc/squashfs-root/usr/plugins/$n" ]; then
+        echo "desk: $n is bundled with Basecamp"; continue
+      fi
+      install_one "$d"
+    done
+    install_one "$lgx" || exit 1
+    bc_up; ocr | head -40 ;;
   restart) bc_down; bc_up; ocr | head -40 ;;
   read) ocr ;;
   click) xdotool mousemove "$2" "$3" click 1; sleep 1.5 ;;

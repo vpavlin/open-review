@@ -34,6 +34,11 @@ if [ -n "$LGX" ]; then
   inbox bridge "curl -sSfL --max-time 300 -o 'lgx/$(basename "$LGX")' '$LGX' && sha256sum lgx/*.lgx > logs/lgx.sha256" \
     || live "  could not download $LGX"
   [ -s "$RUN/logs/lgx.sha256" ] && live "  $(cat "$RUN/logs/lgx.sha256")"
+  # What it needs, from the official catalogue, fetched here so the sandbox's
+  # record of hosts contacted stays the module's own.
+  for l in "$RUN"/lgx/*.lgx; do
+    [ -f "$l" ] && "$HERE/fetch_deps.py" "$l" "$RUN/lgx/deps" "$HOME/lgx-cache" 2>&1 | while read -r d; do live "  dependency: $d"; done
+  done
 fi
 
 live "## static checks (gitleaks, osv-scanner, semgrep)"; log "static"

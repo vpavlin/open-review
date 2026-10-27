@@ -31,7 +31,10 @@ You start in `/run/src`. What you have:
    - You cannot see images. `desk read` prints the text on screen with the
      x,y to click it; `desk click-text "<label>"`, `desk click x y`,
      `desk type`, `desk key Return` drive it. `desk log` shows Basecamp's log,
-     where the module's errors and warnings land.
+     where the module's errors and warnings land, and what it sends and to whom.
+   - An installed app is an icon in the left bar with no text: the first at
+     `desk click 44 178`, each next one about 50 px lower. `desk install` installs
+     the module's declared dependencies from the official catalogue first.
    - `desk shot <what-it-shows>` at every step a reader should see: the module
      open, each feature in use, each attack and what it did. These and the
      screen recording are published with your report as its evidence; list the
