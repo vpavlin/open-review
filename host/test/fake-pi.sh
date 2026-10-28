@@ -8,7 +8,7 @@ echo "reviewer is $(whoami)"
 cat /home/pavel/.ssh/id_ed25519 >/dev/null 2>&1 && echo "BAD: the reviewer read the bait" || echo "ok: the reviewer can't read the bait"
 touch /run/behaviour/x 2>/dev/null && echo "BAD: wrote the record" || echo "ok: the record is out of reach"
 printf '# draft\n' > /run/src/report.md
-as-module bash -c 'echo pwned > /run/src/report.md 2>/dev/null && echo "BAD: the module wrote the report" || echo "ok: the module can't write the report"; cd /run/src && node collect.js'
+as-module bash -c 'echo pwned > /run/src/report.md 2>/dev/null && echo "BAD: the module wrote the report" || echo "ok: the module cannot write the report"; cd /run/src && node collect.js'
 desk start | tail -1
 desk shot desktop
 cat > /run/src/report.md <<'R'
