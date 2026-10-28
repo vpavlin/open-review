@@ -241,3 +241,12 @@ A running log: newest last. What was done, why, and what was found.
   pinned (base digest, Ubuntu archive snapshot, versions); Basecamp fetched
   by URL and hash. host/test/vm.sh proves it on a fresh local VM with a
   stand-in for the model.
+- **The host rebuilt from the repository, proven** (host/README.md): a
+  fresh Ubuntu 24.04 VM on the laptop, set up only by host/00..40 from a
+  clone, ran a stand-in review of the leaky control: 31/31 self-checks, the
+  exfiltration recorded as the module's, the report published. Five faults
+  found on the way, fixed: the apt snapshot needs CA certificates first; a
+  failed image build was swallowed under sudo -i; the intake script was
+  mangled by sudo -i's re-parse; qemu's 10.0.2.0/24 collides with rootless
+  podman's user-mode net; my stand-in's quoting. The review host itself now
+  runs from /opt/open-review (6a5836e) via 40-pipeline.sh.
