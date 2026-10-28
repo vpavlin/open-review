@@ -36,6 +36,8 @@ def satisfies(v, spec):
     return a == b
 
 lgx, out, cache = sys.argv[1:4]
+# What the review's other packages provide is not looked for in the catalogue.
+given = set(filter(None, (sys.argv[4] if len(sys.argv) > 4 else "").split(",")))
 os.makedirs(out, exist_ok=True); os.makedirs(cache, exist_ok=True)
 with tarfile.open(lgx) as t:
     manifest = json.load(t.extractfile("manifest.json"))
@@ -45,7 +47,10 @@ if not deps:
 index = json.loads(get(json.loads(get(REPO))["indexUrl"]))
 pk = index["packages"]
 for d in deps:
-    name, spec = d["name"], d.get("version", "")
+    # A dependency is {name, version}, or just a name (names_ui's is "names").
+    name, spec = (d, "") if isinstance(d, str) else (d["name"], d.get("version", ""))
+    if name in given:
+        print(f"{name} {spec}: one of the packages given"); continue
     entry = pk.get(name) if isinstance(pk, dict) else next((p for p in pk if p.get("name") == name), None)
     vs = [v for v in (entry or {}).get("versions", []) if satisfies(v["manifest"]["version"], spec)]
     if not vs:

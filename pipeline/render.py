@@ -318,16 +318,27 @@ for f_,cls in (("timed-out.txt","warn"),("written-after.txt","warn")):
     if exists_beneath(os.path.join("logs",f_)): notes.append(f"<div class='note {cls}'>{esc(readf(os.path.join('logs',f_)).strip())}</div>")
 if rep and rep.get("repo_tried_to_instruct_reviewer"): notes.append("<div class='note bad'>The repository contained text addressed to the reviewer.</div>")
 lgxsum=readf(os.path.join("logs","lgx.sha256")).strip()
-PKG=readjson(os.path.join("logs","package.json"))
-PKG=PKG if isinstance(PKG,dict) else None
+# Every package evaluated (a module may ship as several); the one a person
+# opens, a view, leads.
+PKGS=[p for p in (readjson(f) for f in files_beneath("logs") if re.fullmatch(r"logs/package(-.+)?\.json",f)) if isinstance(p,dict)]
+PKGS.sort(key=lambda p:(not str(p.get("type","")).startswith("ui"),str(p.get("name"))))
+PKG=PKGS[0] if PKGS else None
 ORC=readf(os.path.join("logs","pipeline-commit")).strip()
 ORC=ORC if re.fullmatch(r"[0-9a-f]{40}",ORC or "") else ""
 def evaluated():
     """What exactly was evaluated (the Freeze rule wants one rootHash per
     review), and what checked it: the open-review commit."""
-    if not PKG:
+    if not PKGS:
         return "<div class=evaluated>Evaluated: the source at this commit (no published package given).</div>"
+    return "".join(one(p) for p in PKGS)
+def one(PKG):
     o=PKG.get("official") or {}
+    sg=PKG.get("signature") or {}
+    if sg.get("valid"):
+        sig=(f"<b class=ok>signed</b> (key <code>{esc(sg.get('key','')[:20])}…</code>"
+             + (f", the repository's <code>{esc(sg['key_in_repository'])}</code>)" if sg.get("key_in_repository") else ", <b class=red>not a key in the repository</b>)"))
+    elif sg: sig="<b class=red>signature does not verify</b>"
+    else: sig="not signed"
     if o.get("error"): cat="the official catalogue couldn't be read"
     elif not o.get("listed"): cat="not in the official Logos catalogue"
     elif not o.get("version_listed"): cat="in the official catalogue, but not this version"
@@ -335,7 +346,7 @@ def evaluated():
     else: cat="<b class=red>the official catalogue lists this version with a different rootHash</b>"
     return (f"<div class=evaluated>Evaluated <b>{esc(PKG.get('name'))} {esc(PKG.get('version'))}</b> "
             f"({esc(PKG.get('type',''))}, {esc(', '.join(PKG.get('variants') or []))}) · rootHash <code>{esc(str(PKG.get('rootHash'))[:16])}…</code>"
-            f" · sha256 <code>{esc(PKG.get('sha256','')[:16])}…</code> · {'signed' if PKG.get('signed') else 'not signed'} · {cat}</div>")
+            f" · sha256 <code>{esc(PKG.get('sha256','')[:16])}…</code> · {sig} · {cat}</div>")
 imgid=readf(os.path.join("logs","image")).strip()[:19]
 # When the review ran (the clock it was given), not when this page was made.
 try: when=time.strftime('%Y-%m-%d %H:%M UTC',time.gmtime(int(readf(os.path.join("logs","clock")).split()[0])))

@@ -2,7 +2,8 @@
 # Review one Basecamp module, end to end. Runs on the review host as the
 # reviewer user. One task = one review (open-review PoC, ADR-072).
 #
-#   review.sh <repo-url> [<commit>] [<lgx-url>]
+#   review.sh <repo-url> [<commit>] [<lgx-url>…]   (a module and the packages
+#                                                  it ships with, e.g. names + names_ui)
 set -uo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 STATE=/home/reviewer/.review
@@ -26,14 +27,17 @@ if [ -z "${REVIEW_SNAPSHOT:-}" ]; then
 fi
 IMG=localhost/open-reviewer:latest
 BASECAMP=/home/reviewer/sandbox/Basecamp.AppImage
-REPO=${1:?repo url}; COMMIT=${2:-HEAD}; LGX=${3:-}
+REPO=${1:?repo url}; COMMIT=${2:-HEAD}
+# Every package given: a module can ship as more than one (LNS: a core module
+# and its view, the view depending on the core).
+LGX=$(printf '%s\n' "${@:3}")
 # The submission's values reach a shell only as variables, and only in the
 # shape they should have: they were pasted into "bash -lc" strings, so a
 # quote in a URL ran commands on the review host (FR-4, 2026-10-28).
 url_ok(){ [[ "$1" =~ ^https://[A-Za-z0-9.-]+(/[A-Za-z0-9._~%+@:/-]*)?$ ]]; }
 if [[ "$REPO" != localdir:* ]] && ! url_ok "$REPO"; then echo "not a repository URL: $REPO"; exit 2; fi
 [[ "$COMMIT" =~ ^([0-9a-f]{7,40}|HEAD)$ ]] || { echo "not a commit: $COMMIT"; exit 2; }
-if [ -n "$LGX" ] && ! url_ok "$LGX"; then echo "not a package URL: $LGX"; exit 2; fi
+for u in "${@:3}"; do url_ok "$u" || { echo "not a package URL: $u"; exit 2; }; done
 slug=$(printf '%s-%s' "$(basename "$REPO" .git)" "${COMMIT:0:12}" | tr -c 'A-Za-z0-9._-' -)
 # What the sandbox's user wrote belongs to a sub-uid here: removed inside
 # podman's user namespace, as the agent's archive does (shrooms ADR-072).
@@ -65,19 +69,30 @@ echo "$REPO" > "$RUN/logs/repo"
 # without the newline basename adds: tr made it ".lgx_", and no package was
 # found; caught rebuilding the host on a VM, 2026-10-28.)
 if [ -n "$LGX" ]; then
-  live "## fetch the published package"; log "lgx $LGX"
+  live "## fetch the published packages"; log "lgx: $(echo $LGX)"
   mkdir -p "$RUN/lgx"
-  inbox bridge 'f=$(printf %s "${LGX##*/}" | tr -c "A-Za-z0-9._-" _); curl -sSfL --max-time 300 -o "lgx/$f" -- "$LGX" && sha256sum lgx/*.lgx > logs/lgx.sha256' \
-    || live "  could not download $LGX"
-  [ -s "$RUN/logs/lgx.sha256" ] && live "  $(cat "$RUN/logs/lgx.sha256")"
-  # What it needs, from the official catalogue, fetched here so the sandbox's
-  # record of hosts contacted stays the module's own.
+  # Each package, and its detached signature where the publisher gives one
+  # (<package>.sig); names are cleaned with no newline, which tr made "_".
+  inbox bridge 'echo "$LGX" | while IFS= read -r u; do [ -n "$u" ] || continue
+      f=$(printf %s "${u##*/}" | tr -c "A-Za-z0-9._-" _)
+      curl -sSfL --max-time 300 -o "lgx/$f" -- "$u" || echo "could not download $u" >&2
+      curl -sfL --max-time 60 -o "lgx/$f.sig" -- "$u.sig" || rm -f "lgx/$f.sig"
+    done; sha256sum lgx/*.lgx > logs/lgx.sha256 2>/dev/null; true' 2>&1 | while read -r e; do live "  $e"; done
+  [ -s "$RUN/logs/lgx.sha256" ] && live "$(sed 's/^/  /' "$RUN/logs/lgx.sha256")"
+  # What exactly is evaluated, each package: name, version, rootHash, its
+  # signature and whose key made it, the official catalogue's view.
+  : > "$RUN/logs/packages.jsonl"
   for l in "$RUN"/lgx/*.lgx; do
     [ -f "$l" ] || continue
-    # What exactly is evaluated: name, version, rootHash, and whether the
-    # official catalogue lists it (the report's headline).
-    "$HERE/package.py" "$l" "$RUN/logs/package.json" 2>&1 | while read -r d; do live "  package: $d"; done
-    "$HERE/fetch_deps.py" "$l" "$RUN/lgx/deps" "$HOME/lgx-cache" 2>&1 | while read -r d; do live "  dependency: $d"; done
+    "$HERE/package.py" "$l" "$RUN/logs/package-$(basename "$l" .lgx).json" "$RUN/src" 2>&1 | while read -r d; do live "  package: $d"; done
+    cat "$RUN/logs/package-$(basename "$l" .lgx).json" >> "$RUN/logs/packages.jsonl" 2>/dev/null; echo >> "$RUN/logs/packages.jsonl"
+  done
+  # What they need from the official catalogue, fetched here so the
+  # sandbox's record of hosts contacted stays the module's own; what the
+  # given packages provide themselves is not looked for there.
+  given=$(for l in "$RUN"/lgx/*.lgx; do tar xzOf "$l" manifest.json 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin).get("name",""))'; done | paste -sd,)
+  for l in "$RUN"/lgx/*.lgx; do
+    [ -f "$l" ] && "$HERE/fetch_deps.py" "$l" "$RUN/lgx/deps" "$HOME/lgx-cache" "$given" 2>&1 | while read -r d; do live "  dependency: $d"; done
   done
 fi
 

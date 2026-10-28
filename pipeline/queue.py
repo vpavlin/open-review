@@ -3,7 +3,7 @@
 # and one runner takes them one at a time, as the review lock demands, and
 # only when the day's model budget can pay for a whole review.
 #
-#   queue.py add <repo-url> [<commit>] [<lgx-url>] [--from WHO] [--notify JSON]
+#   queue.py add <repo-url> [<commit>] [<lgx-url>…] [--from WHO] [--notify JSON]
 #   queue.py list [--json]
 #   queue.py run                  the runner (a user service on the review host)
 #
@@ -74,13 +74,14 @@ def add(argv):
         sys.exit("usage: queue.py add <repo-url> [<commit>] [<lgx-url>] [--from WHO]")
     repo = args[0]
     commit = args[1] if len(args) > 1 and args[1] else "HEAD"
-    lgx = args[2] if len(args) > 2 else ""
+    lgx = args[2:]
     if not URL.match(repo):
         sys.exit(f"refused: not a repository URL: {repo}")
     if not COMMIT.match(commit):
         sys.exit(f"refused: not a commit (7-40 hex characters, or HEAD): {commit}")
-    if lgx and not URL.match(lgx):
-        sys.exit(f"refused: not a package URL: {lgx}")
+    for u in lgx:
+        if not URL.match(u):
+            sys.exit(f"refused: not a package URL: {u}")
     for state in ("pending", "running"):
         for j in jobs(state):
             if j["repo"] == repo and j["commit"] == commit:
@@ -141,7 +142,8 @@ def run():
         job["state"], job["started"] = "running", time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         save(job, "running")
         notify(job, "started")
-        args = [job["repo"], job["commit"]] + ([job["lgx"]] if job.get("lgx") else [])
+        l = job.get("lgx") or []
+        args = [job["repo"], job["commit"]] + ([l] if isinstance(l, str) else l)
         with open(os.path.expanduser(f"~/runs-{job['slug']}.log"), "w") as log:
             rc = subprocess.run(["bash", os.path.join(HERE, "review.sh")] + args, stdout=log, stderr=subprocess.STDOUT).returncode
         try:
