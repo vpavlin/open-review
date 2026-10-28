@@ -4,12 +4,31 @@
 # every model request and reply is logged to a review's gateway.jsonl, with a
 # redaction pass, and a running human-readable transcript is appended for the
 # live view. OpenAI-compatible: forwards /chat/completions to Venice.
-import os,sys,json,time,re,urllib.request,http.server,hashlib
+import os,sys,json,time,re,urllib.request,http.server,hashlib,threading
 VENICE=os.environ.get("GATEWAY_UPSTREAM","https://api.venice.ai/api/v1/chat/completions")
 # Seconds between retries of a provider error; overridable for tests.
 WAITS=[int(x) for x in os.environ.get("GATEWAY_RETRY_WAITS","5,15,45,120,300,600").split(",") if x]
 KEY=os.environ["VENICE_INFERENCE_KEY"]
 TOKEN=os.environ.get("REVIEW_TOKEN","")
+# The write-up gets its own token: testing stops at BUDGET*TEST_SHARE, and
+# only the report may spend the rest. Nothing goes past BUDGET, whatever the
+# repository talks the model into (a review is capped, Václav 2026-10-28).
+REPORT_TOKEN=os.environ.get("REPORT_TOKEN","")
+BUDGET=float(os.environ.get("REVIEW_BUDGET","1.0"))
+TEST_SHARE=float(os.environ.get("REVIEW_TEST_SHARE","0.8"))
+# Venice's price per million tokens (input, cached input, output), in DIEM,
+# which is also its USD price. 2026-10-28.
+PRICES={"deepseek-v4-1-flash-uncensored":(0.33,0.00825,1.32),
+        "deepseek-v4-1-flash-1017":(0.30,0.0075,1.20),"deepseek-v4-1-flash":(0.30,0.0075,1.20)}
+SPENT={"total":0.0,"last":0.0}; LOCK=threading.Lock()
+def cost(model,u):
+    pi,pc,po=PRICES.get((model or "").split("/")[-1],(0.33,0.00825,1.32))
+    pin=u.get("prompt_tokens",0) or 0; cached=(u.get("prompt_tokens_details") or {}).get("cached_tokens",0) or 0
+    return ((pin-cached)*pi+cached*pc+(u.get("completion_tokens",0) or 0)*po)/1e6
+def save_spend():
+    os.makedirs(os.path.join(RUN,"logs"),exist_ok=True)
+    with open(os.path.join(RUN,"logs","spend.json"),"w") as f:
+        json.dump({"spent":round(SPENT["total"],4),"budget":BUDGET,"testing":round(BUDGET*TEST_SHARE,4)},f)
 BIND=os.environ.get("GATEWAY_BIND","127.0.0.1")
 RUN=os.environ.get("REVIEW_RUN","/tmp")           # where to log this review
 PORT=int(os.environ.get("GATEWAY_PORT","7399"))
@@ -50,11 +69,27 @@ def unstream(raw):
 class H(http.server.BaseHTTPRequestHandler):
     def log_message(self,*a): pass
     def do_POST(self):
-        if TOKEN and self.headers.get('Authorization','') != 'Bearer '+TOKEN:
+        auth=self.headers.get('Authorization','')
+        if REPORT_TOKEN and auth=='Bearer '+REPORT_TOKEN: phase="report"
+        elif not TOKEN or auth=='Bearer '+TOKEN: phase="testing"
+        else:
             self.send_response(403); self.end_headers(); self.wfile.write(b'{"error":"forbidden"}'); return
         body=self.rfile.read(int(self.headers.get('Content-Length',0)))
         try: req=json.loads(body)
         except Exception: req={}
+        # Refused before it is sent if it would go over: the next call is
+        # guessed to cost a little more than the last.
+        limit=BUDGET if phase=="report" else BUDGET*TEST_SHARE
+        with LOCK: spent,last=SPENT["total"],SPENT["last"]
+        if spent+max(last,0.002)*1.2 > limit:
+            msg=(f"Review budget spent: {spent:.3f} of {limit:.2f} DIEM for {phase}. "
+                 + ("Stop testing; the report is written next." if phase=="testing" else "Nothing more can be spent."))
+            with open(os.path.join(RUN,"logs",f"budget-spent-{phase}.txt"),"w") as f: f.write(msg+"\n")
+            with open(os.path.join(RUN,"gateway.jsonl"),"a") as f:
+                f.write(json.dumps({"t":time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()),"status":402,"phase":phase,"budget_refused":msg})+"\n")
+            with open(os.path.join(RUN,"live.txt"),"a") as f: f.write("\n("+msg+")\n")
+            self.send_response(402); self.send_header('Content-Type','application/json'); self.end_headers()
+            self.wfile.write(json.dumps({"error":{"message":msg,"type":"budget_exhausted"}}).encode()); return
         r=urllib.request.Request(VENICE,data=body,method='POST',
             headers={'Authorization':'Bearer '+KEY,'Content-Type':'application/json'})
         t0=time.time()
@@ -87,8 +122,13 @@ class H(http.server.BaseHTTPRequestHandler):
                         f"after every retry: {out[:300].decode('utf-8','replace')}\n")
         try: rj=json.loads(out)
         except Exception: rj=unstream(out) if req.get("stream") else {"unparsed":out[:2000].decode("utf-8","replace")}
+        c=cost(req.get("model"),(rj.get("usage") if isinstance(rj,dict) else None) or {})
+        with LOCK:
+            SPENT["total"]+=c
+            if c: SPENT["last"]=c
+            save_spend()
         rec={"t":time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()),"ms":int((time.time()-t0)*1000),
-             "status":code,"model":req.get("model"),"request":deep(req),"response":deep(rj)}
+             "status":code,"model":req.get("model"),"phase":phase,"cost":round(c,6),"request":deep(req),"response":deep(rj)}
         with open(os.path.join(RUN,"gateway.jsonl"),"a") as f: f.write(json.dumps(rec)+"\n")
         # running transcript for the live view: the user turn and the model's reply, redacted
         try:
@@ -104,4 +144,5 @@ class H(http.server.BaseHTTPRequestHandler):
         self.send_response(code); self.send_header('Content-Type',ctype); self.end_headers()
         self.wfile.write(out)
 if __name__=="__main__":
+    save_spend()
     http.server.ThreadingHTTPServer((BIND,PORT),H).serve_forever()

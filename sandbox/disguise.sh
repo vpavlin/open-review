@@ -58,11 +58,14 @@ HOSTNAME=$host
 ENV
 did+=("env written to /tmp/disguise.env")
 
+printf '%s\n' "${did[@]}" > /tmp/disguise.did; printf '%s\n' "${skip[@]}" > /tmp/disguise.skip
 python3 - "$OUT" "$key" "$vendor" "$product" "$cpu" "$mem" "$res" <<PY
 import json,sys
 json.dump({"profile":sys.argv[2],"vendor":sys.argv[3],"product":sys.argv[4],"cpu":sys.argv[5],
            "mem_gb":int(sys.argv[6]),"resolution":sys.argv[7],
-           "applied":"""${did[*]}""".split(),"not_applied":"""${skip[*]}""".split(),
+           "host":"$host",
+           "applied":[l for l in open("/tmp/disguise.did").read().splitlines() if l],
+           "not_applied":[l for l in open("/tmp/disguise.skip").read().splitlines() if l],
            "note":"container disguise; the kernel version is the host's and cannot be hidden"},
           open(sys.argv[1],"w"),indent=1)
 PY

@@ -86,7 +86,9 @@ PY2
 
 # A review whose model failed, or that wrote no report, is a failed review,
 # never a quiet one: published as failed, with no verdict.
-if [ -s "$RUN/logs/inference-failed.txt" ]; then
+if [ -s "$RUN/logs/sandbox-check-failed.txt" ]; then
+  cp "$RUN/logs/sandbox-check-failed.txt" "$RUN/logs/failed.txt"
+elif [ -s "$RUN/logs/inference-failed.txt" ]; then
   { echo "The model provider failed and kept failing, so the review could not be done:"; cat "$RUN/logs/inference-failed.txt"; } > "$RUN/logs/failed.txt"
 elif [ ! -s "$RUN/report.md" ]; then
   echo "The reviewer wrote no report (see session.log for how it ended)." > "$RUN/logs/failed.txt"

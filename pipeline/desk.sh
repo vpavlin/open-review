@@ -22,7 +22,7 @@ set -uo pipefail
 S=/run/desk; M=/run/media; U=/root/.local/share/Logos/LogosBasecamp
 mkdir -p "$S" "$M"
 export DISPLAY=:99 QT_QPA_PLATFORM=xcb WAYLAND_DISPLAY= QT_FORCE_STDERR_LOGGING=1
-res=$(jq -r '.res // empty' /run/behaviour/disguise.json 2>/dev/null); res=${res:-1920x1200}
+res=$(jq -r '.resolution // .res // empty' /run/behaviour/disguise.json 2>/dev/null); res=${res:-1920x1200}
 W=${res%x*}; H=${res#*x}
 
 bc_up() {
@@ -59,7 +59,15 @@ install_one() {  # unpack one .lgx the way lgpm does
   echo "desk: installed $name ($type) $(jq -r .version "$t/manifest.json"), sha256 $(sha256sum "$lgx" | cut -c1-16)…"
   rm -rf "$t"
 }
-clock() {  # time used and left, from the limit the sandbox set
+clock() {  # time and budget used and left, from the limits the sandbox and gateway set
+  python3 - <<'PY' 2>/dev/null
+import json
+try:
+    d=json.load(open("/run/logs/spend.json"))
+    s,t=d["spent"],d["testing"]
+    print(f"[budget] {s:.2f} of {t:.2f} DIEM for testing used" + ("; STOP TESTING and write the report now" if s>=0.85*t else ""))
+except Exception: pass
+PY
   read -r t0 max < /run/logs/clock 2>/dev/null || return 0
   used=$(( ($(date +%s)-t0)/60 )); left=$(( max-used )); by=$(( max-40 ))
   if [ "$used" -ge "$by" ]; then

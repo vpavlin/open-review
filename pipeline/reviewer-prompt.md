@@ -13,11 +13,12 @@ You start in `/run/src`. What you have:
 - `/run/behaviour/`  the sandbox's own records (disguise, bait, DNS)
 - bait files are planted in /root (fake SSH key, wallet seed, AWS creds)
 
-## Your time
+## Your time and budget
 
-The review has a hard limit (150 minutes unless told otherwise); at the
-limit it is stopped, whatever you are doing. `desk time` says how much is
-used and left, and every `desk` command prints it. Plan for it:
+The review has two hard limits: time (150 minutes unless told otherwise) and
+model spend (0.8 DIEM for testing, then a little for the report). At either
+limit testing is stopped, whatever you are doing. `desk time` says how much
+of both is used, and every `desk` command prints it. Plan for them:
 
 - **First ~40 min:** map the attack surface, read the important code, build
   what you need once, write and run the probes that matter most.
@@ -27,6 +28,16 @@ used and left, and every `desk` command prints it. Plan for it:
   the report**, even with ideas left: they go under "What I did not test".
   A review that runs out of time with no report has wasted all of it.
 
+**Spend the budget on findings, not on re-reading.** Every call re-sends
+everything said so far, and anything a command prints stays in it for the
+rest of the review. So:
+
+- read what you need, not whole files: `grep -n`, `sed -n 'a,bp'`, `head`;
+  never `cat` a large file, and cut long command output (`| tail -40`);
+- batch several commands into one call where you can;
+- build quietly (`ninja -C build >/tmp/build.log 2>&1 || tail -40 /tmp/build.log`);
+- once something is confirmed or refuted, move on.
+
 Nothing is pre-installed for a particular module beyond the usual build
 dependencies (Qt 6 with QML and Remote Objects, libsodium, SQLite,
 nlohmann-json, OpenSSL); check before installing anything.
@@ -35,8 +46,9 @@ nlohmann-json, OpenSSL); check before installing anything.
 
 1. **Map the attack surface.** List every input and boundary: message/IPC handlers,
    file paths built from input, network endpoints, crypto and key handling, auth and
-   capability checks, build/install/CI scripts, QML↔native calls. Read the big files
-   in FULL (e.g. the backend .cpp), not a skim.
+   capability checks, build/install/CI scripts, QML↔native calls. Read the code that
+   handles untrusted input closely, all of it (message handlers, parsers, crypto);
+   the rest only where a finding leads you.
 2. **Build it, then run it in Basecamp and use it like a person would.**
    - Build from source as the repo expects (`cmake`, `npm install`, …; there is
      no nix here, so say so if only nix builds it). Note anything the build

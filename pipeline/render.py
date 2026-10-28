@@ -16,6 +16,9 @@ CSS="body{max-width:60em;margin:1.5em auto;padding:0 1em;font:15px/1.5 system-ui
 def write(name,body): open(os.path.join(dest,name),"w").write(body)
 MODEL=(readf(os.path.join("logs","model")).strip() or "venice/deepseek-v4-1-flash-uncensored")
 FAILED=readf(os.path.join("logs","failed.txt")).strip()
+# Venice's prices per million tokens (in, cached in, out), in DIEM = USD, 2026-10-28.
+PRICES={"deepseek-v4-1-flash-uncensored":(0.33,0.00825,1.32),
+        "deepseek-v4-1-flash-1017":(0.30,0.0075,1.20),"deepseek-v4-1-flash":(0.30,0.0075,1.20)}
 def usage_stats(run):
     import glob
     p=os.path.join(run,"gateway.jsonl")
@@ -30,10 +33,7 @@ def usage_stats(run):
             u=(r.get("response") or {}).get("usage") or {}
             pin+=u.get("prompt_tokens",0); pout+=u.get("completion_tokens",0)
             cached+=(u.get("prompt_tokens_details") or {}).get("cached_tokens",0)
-    # Venice's prices per million tokens (in, cached in, out), 2026-10-27.
-    prices={"deepseek-v4-1-flash-uncensored":(0.33,0.00825,1.32),
-            "deepseek-v4-1-flash-1017":(0.30,0.0075,1.20),"deepseek-v4-1-flash":(0.30,0.0075,1.20)}
-    pi_,pc,po=prices.get(MODEL.split("/")[-1],(0.33,0.00825,1.32))
+    pi_,pc,po=PRICES.get(MODEL.split("/")[-1],(0.33,0.00825,1.32))
     cost=((pin-cached)*pi_ + cached*pc + pout*po)/1e6
     return {"model_calls":calls,"input_tokens":pin,"cached_input_tokens":cached,"output_tokens":pout,
             "model_seconds":round(ms/1000,1),"est_cost_usd":round(cost,4),
@@ -139,6 +139,40 @@ if rep and rep.get("findings"):
 findings=(f"<table><tr><th>id</th><th>severity</th><th>finding</th><th>confirmed</th><th>where</th></tr>{fr}</table>"
           "<p>Full exploit and fix per finding in <a href='report.md'>report.md</a>.</p>") if fr else "<p>See <a href='report.md'>report.md</a>.</p>"
 U=usage_stats(run)
+def spend_by_activity():
+    """Where the model budget went: each call's cost, put under what the call
+    went on to run. This is what tells which part of a review to cut."""
+    import re as _re
+    cats={"reading the code":0.0,"builds and probes":0.0,"Basecamp (desk)":0.0,"writing the report":0.0,"other":0.0}
+    p=os.path.join(run,"gateway.jsonl")
+    if not os.path.exists(p): return ""
+    for line in open(p,encoding="utf-8",errors="replace"):
+        try: r=json.loads(line)
+        except Exception: continue
+        if "retry_in_s" in r or "budget_refused" in r: continue
+        rj=r.get("response") or {}
+        c=r.get("cost")
+        if c is None:
+            u=rj.get("usage") or {}; pin=u.get("prompt_tokens",0) or 0
+            cached=(u.get("prompt_tokens_details") or {}).get("cached_tokens",0) or 0
+            pi_,pc,po=PRICES.get(MODEL.split("/")[-1],(0.33,0.00825,1.32))
+            c=((pin-cached)*pi_+cached*pc+(u.get("completion_tokens",0) or 0)*po)/1e6
+        cmd=" ".join(t["function"].get("arguments","") for t in ((rj.get("choices") or [{}])[0].get("message",{}).get("tool_calls") or []))
+        if r.get("phase")=="report" or _re.search(r"report\.(md|json)",cmd): k="writing the report"
+        elif _re.search(r"\bdesk\b",cmd): k="Basecamp (desk)"
+        elif _re.search(r"g\+\+|clang|cmake|ninja|\bmake\b|/run/probes|\./p_|probe|node -e|npm ",cmd): k="builds and probes"
+        elif _re.search(r"\bgrep\b|sed -n|\bcat\b|\bhead\b|\bfind\b|\bls\b|\bwc\b|\brg\b",cmd) or not cmd: k="reading the code"
+        else: k="other"
+        cats[k]+=c
+    tot=sum(cats.values()) or 1
+    rows="".join(f"<tr><td>{esc(k)}</td><td>{v:.3f}</td><td>{100*v/tot:.0f}%</td></tr>" for k,v in cats.items() if v>0.0005)
+    return f"<table><tr><th>went on</th><th>DIEM</th><th></th></tr>{rows}</table>"
+def budget_line():
+    try: d=json.load(open(os.path.join(run,"logs","spend.json")))
+    except Exception: return "no cap for this run"
+    hit=[ph for ph in ("testing","report") if os.path.exists(os.path.join(run,"logs",f"budget-spent-{ph}.txt"))]
+    return (f"{d['spent']:.3f} of {d['budget']:.2f} DIEM ({d['testing']:.2f} for testing)"
+            + (f"; the {' and '.join(hit)} share ran out" if hit else ""))
 def charged():
     """What Venice actually took: the account's balance before the review
     minus after it. Whole account, so other use in the same window counts."""
@@ -165,7 +199,9 @@ usage=(f"<table><tr><th>model calls</th><td>{U['model_calls']}</td></tr>"
        f"<tr><th>model time</th><td>{U['model_seconds']} s</td></tr>"
        f"<tr><th>charged by Venice</th><td>{charged()}</td></tr>"
        f"<tr><th>computed</th><td>${U['est_cost_usd']} <span style='color:#888'>(this review's tokens × Venice's list price for {esc(MODEL)})</span></td></tr>"
-       f"<tr><th>provider errors</th><td>{U['provider_errors']} (retries {U['retries']})</td></tr></table>")
+       f"<tr><th>budget</th><td>{budget_line()}</td></tr>"
+       f"<tr><th>provider errors</th><td>{U['provider_errors']} (retries {U['retries']})</td></tr></table>"
+       f"{spend_by_activity()}")
 if not U["recorded"]:
     usage=(f"<p>{U['model_calls']} model calls, {U['model_seconds']} s of model time. Token counts were not "
            "recorded for this run: the gateway didn't log streamed replies yet.</p>")
