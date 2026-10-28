@@ -6,25 +6,22 @@ reviewer inside the sandbox, the recording HTTPS proxy, a per-review spend cap,
 the sandbox self-check, the reviewer and module without root.
 
 ## From open-review's own review (6c46c82, 2026-10-28)
-Fixed: FR-1, FR-3, FR-4, FR-5, FR-6, FR-8, FR-9, and FR-2 in part (the module
-can no longer touch the behaviour record, the logs or the video). Still open:
-- **FR-2/FR-14, the rest: the reviewer and the module are one user.** What the
-  reviewer builds and runs, the module included, can rewrite the reviewer's
-  draft report, its probes and its screenshots, and can read pi's tokens (the
-  gateway's cap holds). Next: run untrusted code as a second user (`desk`
-  starts Basecamp as it; builds and probes through a helper), and the
-  write-up pass in a fresh sandbox that gets the session, not the old one.
-- **FR-7:** a repository can configure its own scanners (`.semgrepignore`,
-  `.gitleaks.toml`) to hide findings, and a scanner that fails is silent. Run
-  them with our config only, and record failures.
-- **FR-11:** caret ranges are wrong for 0.x versions in fetch_deps.py.
-- **FR-12:** gateway DoS surface (unbounded body size, threads) and secret
-  redaction that misses some key shapes.
-- **FR-13:** the image and host are not pinned (apt, pipx, npm at latest);
-  record the image digest per review at least.
+Fixed: FR-1 to FR-12 and FR-14 (the module runs as its own user and can't
+touch the report, the probes, the record or the video), FR-16, and FR-13 in
+part (the image is recorded per review). Still open:
+- **FR-13:** the image and the host are not pinned (apt, pipx, npm at their
+  latest); see "rebuild the host" below.
 - **FR-15:** reviews are plain HTTP and the hash chain is unsigned.
-- **FR-16:** anything staged in the run's evidence/media dirs is published
-  same-origin; publish a fixed list of file types only.
+- **What is left of FR-2/FR-14:** the reviewer is told to run untrusted code
+  as the module's user and could still run it as itself; and installs are
+  slower under strace (about 5 minutes for delivery_module's 98 MB).
+
+## Rebuild the host from the repository
+- A `40-pipeline.sh`: the pipeline from a tagged checkout (not files copied
+  in), the Basecamp AppImage fetched by URL and hash, the sandbox image
+  built from pinned versions, the review user's crontab/units. Then a fresh
+  VM plus the repository is the whole setup. `30-agent.sh` still installs pi
+  on the host, which isn't needed since pi runs in the sandbox.
 
 ## Community submissions through WhisperBox (atlas/whisperbox, 2026-10-28)
 - **Phase 1, a form:** Václav creates a WhisperBox form; an always-on
