@@ -8,7 +8,9 @@ import os,sys,json,time,re,urllib.request,http.server,hashlib,threading
 VENICE=os.environ.get("GATEWAY_UPSTREAM","https://api.venice.ai/api/v1/chat/completions")
 # Seconds between retries of a provider error; overridable for tests.
 WAITS=[int(x) for x in os.environ.get("GATEWAY_RETRY_WAITS","5,15,45,120,300,600").split(",") if x]
-KEY=os.environ["VENICE_INFERENCE_KEY"]
+# The provider's key: Venice's by default, or another OpenAI-compatible
+# provider's (OpenRouter for the free-model trial), given by reviewer.sh.
+KEY=os.environ.get("PROVIDER_KEY") or os.environ["VENICE_INFERENCE_KEY"]
 TOKEN=os.environ.get("REVIEW_TOKEN","")
 # The write-up gets its own token: testing stops at BUDGET*TEST_SHARE, and
 # only the report may spend the rest. Nothing goes past BUDGET, whatever the
@@ -21,6 +23,9 @@ BUDGET=float(os.environ.get("REVIEW_BUDGET","1.0"))
 TEST_SHARE=float(os.environ.get("REVIEW_TEST_SHARE","0.8"))
 # Venice's price per million tokens (input, cached input, output), in DIEM,
 # which is also its USD price. 2026-10-28.
+# Free models (OpenRouter's ":free") cost nothing; the review's time cap
+# still holds. Anything else not listed is refused below.
+FREE=MODEL_IS_FREE=os.environ.get("REVIEW_MODEL","").endswith(":free")
 PRICES={"deepseek-v4-1-flash-uncensored":(0.33,0.00825,1.32),
         "deepseek-v4-1-flash-1017":(0.30,0.0075,1.20),"deepseek-v4-1-flash":(0.30,0.0075,1.20)}
 SPENT={"total":0.0,"last":0.0}; LOCK=threading.Lock()
@@ -28,6 +33,7 @@ SPENT={"total":0.0,"last":0.0}; LOCK=threading.Lock()
 # only a few are in flight at once: the sandbox holds the token (FR-12).
 MAX_BODY=32<<20; SLOTS=threading.BoundedSemaphore(4)
 def cost(model,u):
+    if (model or "").endswith(":free"): return 0.0
     pi,pc,po=PRICES.get((model or "").split("/")[-1],(0.33,0.00825,1.32))
     pin=u.get("prompt_tokens",0) or 0; cached=(u.get("prompt_tokens_details") or {}).get("cached_tokens",0) or 0
     return ((pin-cached)*pi+cached*pc+(u.get("completion_tokens",0) or 0)*po)/1e6
@@ -90,7 +96,8 @@ class H(http.server.BaseHTTPRequestHandler):
         body=self.rfile.read(n)
         try: req=json.loads(body)
         except Exception: req={}
-        if (req.get("model") or "").split("/")[-1]!=MODEL or MODEL not in PRICES:
+        # The model's whole id: an OpenRouter one has slashes of its own.
+        if (req.get("model") or "")!=MODEL or not (MODEL in PRICES or FREE):
             self.send_response(400); self.send_header('Content-Type','application/json'); self.end_headers()
             self.wfile.write(json.dumps({"error":{"message":f"only {MODEL} is served here"}}).encode()); return
         # Refused before it is sent if it would go over: the next call is

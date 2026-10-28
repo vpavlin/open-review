@@ -81,7 +81,7 @@ fi
 mkdir -p "$UH/.pi/agent"
 cat > "$UH/.pi/agent/models.json" <<JSON
 {"providers":{"venice":{"baseUrl":"${GW}","api":"openai-completions","apiKey":"${REVIEW_TOKEN}",
- "models":[{"id":"${REVIEW_MODEL}","name":"DeepSeek","contextWindow":1000000,"maxTokens":131072}]}}}
+ "models":[{"id":"${REVIEW_MODEL}","name":"DeepSeek","contextWindow":1000000,"maxTokens":${REVIEW_MAX_OUT:-131072}}]}}}
 JSON
 chown -R "$U:$U" "$UH/.pi"
 
