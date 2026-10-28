@@ -36,10 +36,30 @@ cd /run/src 2>/dev/null || { echo '{"error":"no source"}' > "$B/summary.json"; k
 MAX_MIN=${REVIEW_MAX_MIN:-150}
 strace -f -qq -e trace=openat,open,connect,execve,unlinkat,unlink,rename -e signal=none -s 300 -o "$B/strace.log" \
   timeout --kill-after=60 "${MAX_MIN}m" pi --model "venice/${REVIEW_MODEL}" -p "Your instructions are in /pipeline/reviewer-prompt.md. Read all of it first, then do what it says." \
-  > /run/logs/session.txt 2>&1
-rc=$?
+  > /run/logs/session.txt 2>&1 &
+ST=$!
+# Wait for the reviewer, not for strace: strace -f waits for everything it
+# traces, and Basecamp, the screen and the recorder that pi started outlive
+# it. Forumer's fourth run hit its cap at 22:05 and sat there all night.
+for _ in $(seq 1 20); do TO=$(pgrep -P "$ST" -x timeout); [ -n "$TO" ] && break; sleep 0.5; done
+while [ -n "${TO:-}" ] && kill -0 "$TO" 2>/dev/null; do sleep 5; done
+desk stop >/dev/null 2>&1 || true
+for p in $(ps -eo pid= | tr -d ' '); do
+  case "$p" in 1|"$$"|"$SINK"|"$ST") ;; *) kill -9 "$p" 2>/dev/null ;; esac
+done
+wait "$ST"; rc=$?
 echo "$rc" > /run/logs/reviewer.rc
-[ "$rc" = 124 ] && echo "The review hit its ${MAX_MIN}-minute limit and was stopped; what it found by then is below." > /run/logs/timed-out.txt
+[ "$rc" = 124 ] && echo "The review hit its ${MAX_MIN}-minute limit and was stopped." > /run/logs/timed-out.txt
+
+# Stopped without a report (the cap, or a crash) while the model still works:
+# the same reviewer, in the same conversation, writes up what it found, and
+# runs nothing more. Forumer's fourth run tested for 150 minutes and never
+# wrote a line, though told to write as it went.
+if [ ! -s /run/src/report.md ] && [ ! -s /run/logs/inference-failed.txt ]; then
+  timeout --kill-after=30 25m pi --continue --model "venice/${REVIEW_MODEL}" -p "Your testing time is up: run no more tests, probes or desk commands. Write /run/src/report.md and /run/src/report.json now, in the exact format given in /pipeline/reviewer-prompt.md, from everything you found and ran in this session: the probes in /run/probes and their results, and the screenshots in /run/media (list them in What I ran). Mark what you did not finish as not tested. Then stop." \
+    > /run/logs/report-pass.txt 2>&1
+  [ -s /run/src/report.md ] && echo "The reviewer stopped before writing its report (exit $rc); it wrote it afterwards from its session, testing nothing more." > /run/logs/written-after.txt
+fi
 # pi wrote report.md/report.json into /run/src; move them up to the run root.
 for f in report.md report.json; do [ -f "/run/src/$f" ] && cp "/run/src/$f" "/run/$f"; done
 cp /run/logs/session.txt /run/session.log 2>/dev/null || true
