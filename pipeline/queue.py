@@ -14,7 +14,7 @@ import json, os, re, subprocess, sys, time, uuid
 
 Q = os.path.expanduser("~/queue")
 HERE = os.path.dirname(os.path.abspath(__file__))
-BASE = os.environ.get("REVIEW_BASE", "http://77.237.236.27")
+BASE = os.environ.get("REVIEW_BASE", "https://or.vpavlin.xyz")
 BUDGET = float(os.environ.get("REVIEW_BUDGET", "1.0"))
 for d in ("pending", "running", "done"):
     os.makedirs(os.path.join(Q, d), exist_ok=True)

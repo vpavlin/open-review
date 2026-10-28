@@ -50,7 +50,7 @@ inbox(){ podman run --rm --network "$1" -e REPO -e COMMIT -e LGX -v "$RUN:/run:z
 export REPO COMMIT LGX
 
 : > "$RUN/live.txt"; live "# Reviewing $REPO @ $COMMIT"; live "starting…"
-log "review $REPO @ $COMMIT -> $RUN ; live at ${REVIEW_BASE:-http://REVIEW-HOST}/$slug/live.html"
+log "review $REPO @ $COMMIT -> $RUN ; live at ${REVIEW_BASE:-https://or.vpavlin.xyz}/$slug/live.html"
 
 live "## clone"; log "clone"
 if [[ "$REPO" == localdir:* ]]; then
@@ -125,4 +125,4 @@ log "publish"; "$HERE/render.py" "$RUN" "$DEST" "$slug" final 2>&1 | tee -a "$RU
 # A copy on Logos Storage, where the host runs a node (host/50-storage.sh).
 "$HERE/storage.py" "$DEST" 2>&1 | tee -a "$RUN/logs/pipeline.log" || true
 "$HERE/index.py" /srv/reviews >/dev/null 2>&1 || log "the front page could not be updated"
-log "done -> ${REVIEW_BASE:-http://REVIEW-HOST}/$slug/"
+log "done -> ${REVIEW_BASE:-https://or.vpavlin.xyz}/$slug/"

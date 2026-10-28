@@ -6,7 +6,7 @@ Requires=wb-bot.service
 [Service]
 ExecStart=/usr/bin/python3 %h/pipeline/whisperbox.py poll
 Environment=PATH=/usr/local/bin:/usr/bin:/bin
-Environment=REVIEW_BASE=http://77.237.236.27
+Environment=REVIEW_BASE=https://or.vpavlin.xyz
 Restart=always
 RestartSec=60
 

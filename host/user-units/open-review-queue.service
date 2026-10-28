@@ -6,7 +6,7 @@ After=network-online.target
 ExecStart=/usr/bin/python3 %h/pipeline/queue.py run
 Restart=always
 RestartSec=30
-Environment=REVIEW_BASE=http://77.237.236.27
+Environment=REVIEW_BASE=https://or.vpavlin.xyz
 Environment=PATH=/usr/local/bin:/usr/bin:/bin:%h/.local/bin
 
 [Install]

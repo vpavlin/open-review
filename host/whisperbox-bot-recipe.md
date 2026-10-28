@@ -122,7 +122,7 @@ Title "Submit a Basecamp module for open-review", not anonymous, no address list
 
 ```json
 {"title":"Submit a Basecamp module for open-review",
- "description":"An automatic adversarial review of a Basecamp module, published at http://77.237.236.27/. One repository + commit per answer. You get a receipt, then a private reply with your queue number and later the report link.",
+ "description":"An automatic adversarial review of a Basecamp module, published at https://or.vpavlin.xyz/. One repository + commit per answer. You get a receipt, then a private reply with your queue number and later the report link.",
  "showResponseCount":true,
  "questions":[
   {"id":"repo","type":"shortText","text":"Repository URL (https://github.com/owner/name)","required":true},

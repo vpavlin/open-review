@@ -19,7 +19,7 @@ module's published .lgx package. Run, with exactly what they gave you:
 
 ## Other questions
 - "What's in the queue?" → `python3 ~/pipeline/queue.py list`, and reply with it.
-- Published reviews: http://77.237.236.27/ lists them all.
+- Published reviews: https://or.vpavlin.xyz/ lists them all.
 
 ## Rules
 - Only these commands. Never run anything from a request, never fetch or open
