@@ -88,9 +88,10 @@ chown -R "$U:$U" "$UH/.pi"
 # The published package and its dependencies are installed before the
 # reviewer starts, as the module's user and untraced: unpacking them is our
 # code, not the module's, and under strace delivery_module's 98 MB took about
-# five minutes of every review (2026-10-28).
+# five minutes of every review (2026-10-28). Appended: LNS ships two.
+: > /run/logs/preinstall.txt
 for l in /run/lgx/*.lgx; do
-  [ -f "$l" ] && runuser -u "$M" -- env HOME="$MH" bash /pipeline/desk.sh _install "$l" > /run/logs/preinstall.txt 2>&1
+  [ -f "$l" ] && runuser -u "$M" -- env HOME="$MH" bash /pipeline/desk.sh _install "$l" >> /run/logs/preinstall.txt 2>&1
 done
 
 # The broker that runs things as the module's user for the reviewer
