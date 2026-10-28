@@ -1,6 +1,6 @@
 # Open review: automatic audits of Basecamp modules
 
-Updated 2026-10-27 · laptop/shrooms for Václav
+Updated 2026-10-28 · laptop/shrooms for Václav
 
 **Code:** [github.com/vpavlin/open-review](https://github.com/vpavlin/open-review) (public). **Status: working proof of concept** — the full pipeline runs end to end on a dedicated VM. See `NOTES.md` (running log) and `BACKLOG.md` in the repo.
 
@@ -105,7 +105,7 @@ Two more tricks against code that waits:
 
 ## What gets published
 
-Each review is a folder at `data.vpavlin.xyz/reviews/<module>-<commit>/` for the PoC, later Logos Storage too. All public, since only open source is accepted.
+Each review is a public folder on the review VM, `http://REVIEW-HOST/<module>-<commit>/` for the PoC (the review node never writes to anyone else's storage), later Logos Storage too. All public, since only open source is accepted. A re-review of the same commit keeps the earlier one beside it.
 
 | File | What it is |
 | --- | --- |
@@ -167,7 +167,7 @@ and an Evaluated Releases catalog need.
 
 ## Status
 
-**PoC, on a dedicated VM (Contabo VPS 6), reachable only over a private mesh — done:**
+**PoC, on a dedicated VM (Contabo VPS 6), administered only over a private mesh, its reviews public over HTTP — done:**
 
 - [x] The VM, rebuildable from `host/00-base.sh` → `10-shrooms.sh` → `20-web.sh` → `30-agent.sh`.
 - [x] The laptop disguise: three profiles (XPS 13, ThinkPad X1, Framework 13), picked at random per run.
