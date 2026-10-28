@@ -68,8 +68,9 @@ nlohmann-json, OpenSSL); check before installing anything.
      no nix here, so say so if only nix builds it). Note anything the build
      fetches or runs.
    - Run the module in a real Basecamp with `desk` (run `desk` alone for help):
-     `desk start`, then `desk install /run/lgx/<file>.lgx`. The published package is
-     what users get, so test that. Then open the module and go through every
+     `desk start`: the published package from `/run/lgx` (what users get) and its
+     dependencies are already installed, so the module is in Basecamp's left
+     bar. (`desk install <file.lgx>` installs something else.) Then open the module and go through every
      screen and feature: create, post, join, import, export, settings. Feed its
      inputs hostile values (huge, malformed, unicode tricks, injection strings).
    - You cannot see images. `desk read` prints the text on screen with the

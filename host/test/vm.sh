@@ -75,7 +75,19 @@ verify() {
     echo "--- services: queue $(sudo -iu reviewer env XDG_RUNTIME_DIR=/run/user/$(id -u reviewer) systemctl --user is-active open-review-queue), agent $(sudo -iu reviewer env XDG_RUNTIME_DIR=/run/user/$(id -u reviewer) systemctl --user is-active shrooms-agent)"'
 }
 
+verify_package() {
+  # A module with a published package: the headline, the dependencies from
+  # the official catalogue, and the install done before the reviewer starts.
+  "${SSH[@]}" 'set -e
+    sudo -iu reviewer bash -lc "REVIEW_TEST_PI=/home/reviewer/fake-pi.sh REVIEW_MAX_MIN=15 bash ~/pipeline/review.sh https://github.com/bristinWild/forumer b9907523bffc975723762f1766f483d576b677e3 https://github.com/bristinWild/forumer/releases/download/v0.2.5/forumer-0.2.5-linux-x86_64.lgx" | tail -3
+    R=/home/reviewer/runs/forumer-b9907523bffc
+    echo "--- installed before the reviewer started:"; sudo grep "^desk:" $R/logs/preinstall.txt
+    echo "--- the headline:"; sudo grep -o "Evaluated <b>[^<]*</b>[^<]*" /srv/reviews/forumer-b9907523bffc/index.html | head -1
+    echo "--- reviewed by open-review: $(sudo jq -r .open_review_commit /srv/reviews/forumer-b9907523bffc/review.json)"'
+}
+
 case "${1:-}" in
+  verify-package) verify_package ;;
   up) up ;;
   setup) setup ;;
   verify) verify ;;

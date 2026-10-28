@@ -71,7 +71,11 @@ if [ -n "$LGX" ]; then
   # What it needs, from the official catalogue, fetched here so the sandbox's
   # record of hosts contacted stays the module's own.
   for l in "$RUN"/lgx/*.lgx; do
-    [ -f "$l" ] && "$HERE/fetch_deps.py" "$l" "$RUN/lgx/deps" "$HOME/lgx-cache" 2>&1 | while read -r d; do live "  dependency: $d"; done
+    [ -f "$l" ] || continue
+    # What exactly is evaluated: name, version, rootHash, and whether the
+    # official catalogue lists it (the report's headline).
+    "$HERE/package.py" "$l" "$RUN/logs/package.json" 2>&1 | while read -r d; do live "  package: $d"; done
+    "$HERE/fetch_deps.py" "$l" "$RUN/lgx/deps" "$HOME/lgx-cache" 2>&1 | while read -r d; do live "  dependency: $d"; done
   done
 fi
 

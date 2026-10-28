@@ -5,7 +5,7 @@
 #   final  when done: index.html (the report + evidence), and live.html stops
 #          refreshing and points at it.
 # Everything from the module is escaped; nothing is served as HTML or script.
-import sys,os,json,html,glob,shutil,time,stat
+import sys,os,json,html,glob,shutil,time,stat,re
 run,dest,slug=sys.argv[1:4]; mode=sys.argv[4] if len(sys.argv)>4 else "final"
 os.makedirs(dest,exist_ok=True)
 def esc(x): return html.escape(str(x))
@@ -318,6 +318,24 @@ for f_,cls in (("timed-out.txt","warn"),("written-after.txt","warn")):
     if exists_beneath(os.path.join("logs",f_)): notes.append(f"<div class='note {cls}'>{esc(readf(os.path.join('logs',f_)).strip())}</div>")
 if rep and rep.get("repo_tried_to_instruct_reviewer"): notes.append("<div class='note bad'>The repository contained text addressed to the reviewer.</div>")
 lgxsum=readf(os.path.join("logs","lgx.sha256")).strip()
+PKG=readjson(os.path.join("logs","package.json"))
+PKG=PKG if isinstance(PKG,dict) else None
+ORC=readf(os.path.join("logs","pipeline-commit")).strip()
+ORC=ORC if re.fullmatch(r"[0-9a-f]{40}",ORC or "") else ""
+def evaluated():
+    """What exactly was evaluated (the Freeze rule wants one rootHash per
+    review), and what checked it: the open-review commit."""
+    if not PKG:
+        return "<div class=evaluated>Evaluated: the source at this commit (no published package given).</div>"
+    o=PKG.get("official") or {}
+    if o.get("error"): cat="the official catalogue couldn't be read"
+    elif not o.get("listed"): cat="not in the official Logos catalogue"
+    elif not o.get("version_listed"): cat="in the official catalogue, but not this version"
+    elif o.get("rootHash_matches"): cat="in the official Logos catalogue, same rootHash"
+    else: cat="<b class=red>the official catalogue lists this version with a different rootHash</b>"
+    return (f"<div class=evaluated>Evaluated <b>{esc(PKG.get('name'))} {esc(PKG.get('version'))}</b> "
+            f"({esc(PKG.get('type',''))}, {esc(', '.join(PKG.get('variants') or []))}) · rootHash <code>{esc(str(PKG.get('rootHash'))[:16])}…</code>"
+            f" · sha256 <code>{esc(PKG.get('sha256','')[:16])}…</code> · {'signed' if PKG.get('signed') else 'not signed'} · {cat}</div>")
 imgid=readf(os.path.join("logs","image")).strip()[:19]
 # When the review ran (the clock it was given), not when this page was made.
 try: when=time.strftime('%Y-%m-%d %H:%M UTC',time.gmtime(int(readf(os.path.join("logs","clock")).split()[0])))
@@ -350,6 +368,7 @@ header.hero{background:linear-gradient(135deg,#141a21,#0f1216);border:1px solid 
 .chip.sev-critical{color:var(--critical)}.chip.sev-high{color:var(--high)}.chip.sev-medium{color:var(--medium)}.chip.sev-low{color:var(--low)}
 .facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(10em,1fr));gap:.6em;margin-top:1em}
 .fact{background:#0f1317;border:1px solid var(--line);border-radius:8px;padding:.5em .8em}.fact b{display:block;color:var(--dim);font-weight:500;font-size:.8em;text-transform:uppercase;letter-spacing:.05em}
+.evaluated{margin-top:.7em;padding:.45em .8em;border-radius:8px;background:#0f1317;border:1px solid var(--line);font-size:.9em;overflow-wrap:anywhere}
 .note{border-radius:8px;padding:.6em 1em;margin:.6em 0;border:1px solid}.note.warn{border-color:#6b5520;background:#1d1a10;color:#f5c542}.note.bad{border-color:#6b2027;background:#1d1013;color:#ff8a8a}
 section{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:1em 1.4em;margin:1em 0}
 section h2{margin:.2em 0 .6em;font-size:1.15em}section h3,section h4,section h5{margin:.9em 0 .3em}
@@ -381,11 +400,12 @@ write("index.html", f"""<!doctype html><meta charset=utf-8><meta name=viewport c
 <h1>{esc(title)}</h1>
 <div class=sub><code>{esc(repo)}</code> @ <code>{esc(commit[:12])}</code></div>
 <div class=chips>{chips}</div>
+{evaluated()}
 <div class=facts>
 <div class=fact><b>Reviewed</b>{esc(when)}</div>
 <div class=fact><b>Model</b>{esc(MODEL.split('/')[-1])}</div>
 <div class=fact><b>Cost</b>{esc(cost)}</div>
-<div class=fact><b>Package</b>{esc(lgxsum.split()[0][:16]+'…') if lgxsum else 'source only'}</div>
+<div class=fact><b>open-review</b>{f'<a href="https://github.com/vpavlin/open-review/tree/{ORC}"><code>{ORC[:12]}</code></a>' if ORC else 'not recorded'}</div>
 </div></header>
 {''.join(notes)}
 {failed_html() if FAILED else ''}
@@ -405,12 +425,12 @@ write("index.html", f"""<!doctype html><meta charset=utf-8><meta name=viewport c
 <li><a href="behaviour/">behaviour/</a>: strace, DNS, the proxies' request logs, bait, the sandbox's self-check · <a href="checks/">checks/</a>: gitleaks, osv-scanner, semgrep · <a href="media/">media/</a></li>
 <li><a href="chain.txt">chain.txt</a>: the hash-chain root over every file of the run · <a href="live.txt">live.txt</a>: the running transcript</li></ul></section>
 <footer>Triage, not approval: automated and imperfect. The module ran in a sandbox dressed as a laptop and instrumented; the host kernel is not hidden.
-Sandbox image <code>{esc(imgid or 'not recorded')}</code>{' · package sha256 <code>'+esc(lgxsum.split()[0])+'</code>' if lgxsum else ''}.</footer>
+Reviewed by open-review {f'<a href="https://github.com/vpavlin/open-review/tree/{ORC}"><code>{ORC[:12]}</code></a>' if ORC else '(commit not recorded)'}; sandbox image <code>{esc(imgid or 'not recorded')}</code>{' · package sha256 <code>'+esc(lgxsum.split()[0])+'</code>' if lgxsum else ''}.</footer>
 </main>""")
 # For the list of reviews.
 json.dump({"slug":slug,"title":title,"repo":repo,"commit":commit,"when":when,"verdict":worst,"pill":pill,
            "counts":counts,"cost":cost,"summary":(rep or {}).get("verdict_summary","") if isinstance((rep or {}).get("verdict_summary",""),str) else "",
-           "failed":bool(FAILED),"lgx":lgxsum.split()[0] if lgxsum else "",
+           "failed":bool(FAILED),"lgx":lgxsum.split()[0] if lgxsum else "","package":PKG,"open_review_commit":ORC,
            # A re-render keeps the Logos Storage copy storage.py made.
            "storage":(json.load(open(os.path.join(dest,"storage.json"))) if os.path.isfile(os.path.join(dest,"storage.json")) else None)},
           open(os.path.join(dest,"review.json"),"w"))

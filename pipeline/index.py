@@ -46,7 +46,8 @@ for base, rs in sorted(latest.items(), key=lambda kv: kv[1][-1].get("when", ""),
     rows.append(
         f"<a class=row href='{esc(r['dir'])}/'><div class=top><span class='verdict v-{esc(r.get('verdict','info'))}'>{esc(r.get('pill',''))}</span>"
         f"<b>{esc(r.get('title', base))}</b><span class=when>{esc(r.get('when',''))}</span></div>"
-        f"<div class=sub><code>{esc(r.get('repo',''))}</code>{' @ <code>'+esc(str(r.get('commit',''))[:12])+'</code>' if r.get('commit') else ''}"
+        f"<div class=sub>{'<b>'+esc(r['package'].get('name',''))+' '+esc(r['package'].get('version',''))+'</b> · ' if isinstance(r.get('package'),dict) else ''}"
+        f"<code>{esc(r.get('repo',''))}</code>{' @ <code>'+esc(str(r.get('commit',''))[:12])+'</code>' if r.get('commit') else ''}"
         f"{' · '+esc(r['cost']) if r.get('cost') else ''}"
         f"{' · Logos Storage <code>'+esc(r['storage']['cid'][:14])+'…</code>' if isinstance(r.get('storage'),dict) and r['storage'].get('cid') else ''}"
         f"</div><div class=chips>{chips}</div><p>{esc(summ)}</p></a>"
