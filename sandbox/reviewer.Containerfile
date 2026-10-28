@@ -6,12 +6,16 @@
 # caged pi session (shrooms ADR-072), with no credentials and a network limited
 # to the model gateway and package mirrors.
 
-FROM docker.io/library/ubuntu:24.04 AS reviewer
+# Pinned so the image rebuilt elsewhere is this one: the base by digest, Ubuntu's
+# packages from a dated snapshot of the archive (apt 2.7+), the rest by version.
+FROM docker.io/library/ubuntu:24.04@sha256:24737cef17f4e22b1977df7d9a05e77c4e28b7da5b8911f8d8ccda136bf3573c AS reviewer
 ENV DEBIAN_FRONTEND=noninteractive
+ARG UBUNTU_SNAPSHOT=20261028T000000Z
+RUN echo "APT::Snapshot \"${UBUNTU_SNAPSHOT}\";" > /etc/apt/apt.conf.d/50snapshot
 # Node 22 (the AppImage needs a newer glibc than Debian bookworm shipped).
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl gnupg \
     && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
-    && apt-get install -y --no-install-recommends nodejs \
+    && apt-get install -y --no-install-recommends nodejs=22.23.4-1nodesource1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Build, read and run tools.
@@ -49,7 +53,7 @@ RUN set -eux; a="$(dpkg --print-architecture)"; \
     curl -fsSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS}/gitleaks_${GITLEAKS}_linux_${gl}.tar.gz" | tar -xz -C /usr/local/bin gitleaks; \
     curl -fsSL "https://github.com/google/osv-scanner/releases/download/v${OSV}/osv-scanner_${os}" -o /usr/local/bin/osv-scanner; \
     chmod +x /usr/local/bin/osv-scanner
-RUN PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin pipx install semgrep >/dev/null
+RUN PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin pipx install semgrep==1.182.1 >/dev/null
 
 # faketime, to move the sandbox clock forward during a run so code that waits
 # before misbehaving still acts.
@@ -67,7 +71,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # it; both root's, out of the user's reach.
 RUN apt-get update && apt-get install -y --no-install-recommends iptables \
     && rm -rf /var/lib/apt/lists/*
-RUN PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin pipx install mitmproxy >/dev/null
+RUN PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin pipx install mitmproxy==12.3.1 >/dev/null
 
 # The reviewer and the module run as an ordinary user, with no sudo: root in
 # the sandbox keeps the instruments (after agentic-job: take root away). Named

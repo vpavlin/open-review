@@ -34,3 +34,4 @@ ufw --force enable
 ufw allow 51820/udp comment "shrooms wireguard"
 ufw allow 60000/tcp comment "shrooms delivery"
 ufw allow 9000/udp comment "shrooms discovery"
+ufw allow in on shrooms0 comment "the review mesh"
