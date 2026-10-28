@@ -116,4 +116,5 @@ fi
 [ -s "$RUN/logs/failed.txt" ] && { log "FAILED: $(head -1 "$RUN/logs/failed.txt")"; live "## REVIEW FAILED"; live "$(cat "$RUN/logs/failed.txt")"; }
 
 log "publish"; "$HERE/render.py" "$RUN" "$DEST" "$slug" final 2>&1 | tee -a "$RUN/logs/pipeline.log"
+"$HERE/index.py" /srv/reviews >/dev/null 2>&1 || log "the front page could not be updated"
 log "done -> ${REVIEW_BASE:-http://REVIEW-HOST}/$slug/"
