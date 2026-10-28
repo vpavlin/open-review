@@ -273,3 +273,14 @@ A running log: newest last. What was done, why, and what was found.
   two more faults: pi's dependencies weren't pinned (a shrinkwrap from the
   working image now), and the package's file name became ".lgx_". Clean
   from-scratch pass at 6d6bc9c, which the review host runs.
+- **LNS replaces the forumer re-run** (Václav): jefdiesel/logos-names at the
+  basecamp-v0.10.1 tag (1451ec8), two packages (names 0.9.0 core +
+  names_ui 0.10.1 view, the view depending on the core), each with a
+  detached SSH signature. Reviews now take every package a module ships
+  as, check such signatures (both good, by scripts/release-signing-key.pub
+  in the repository at that commit, SHA256:dAQbSDw6…, as the README says)
+  and list each in the header. Queued for the 00:00 UTC refill.
+- **https://or.vpavlin.xyz** live (Let's Encrypt via Caddy); the links use it.
+  One hand-made tweak found on the host while doing it: the review user's
+  ~/.profile exported REVIEW_BASE with the IP, overriding the repository's
+  default. Removed; the VM never had it.
