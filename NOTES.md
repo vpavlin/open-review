@@ -250,3 +250,16 @@ A running log: newest last. What was done, why, and what was found.
   mangled by sudo -i's re-parse; qemu's 10.0.2.0/24 collides with rootless
   podman's user-mode net; my stand-in's quoting. The review host itself now
   runs from /opt/open-review (6a5836e) via 40-pipeline.sh.
+- **Logos Storage** (6860e48): host/50-storage.sh runs a node (v0.5.3, by
+  hash) on logos.test; each published review goes up as one .tar.gz, its CID
+  on the page and the front page. All 11 reviews uploaded. Verified: a
+  second node, on the laptop, fetched the leaky control's archive by CID
+  over the network in 2.7 s, sha256 matching. The node refuses
+  `application/gzip` as a MIME type; octet-stream works.
+- **Final proof, a fresh VM with host/00..50:** the stand-in review passed
+  end to end, published, and mirrored to Logos Storage (its CID recorded).
+- **Waiting on Václav:** joining the review host's mesh (the laptop's
+  "review" mesh is a different one, so no agent can reach the intake); the
+  WhisperBox form and adding the bot as co-owner (host/whisperbox-bot.md);
+  whether to release WhisperBox 0.5.0. Forumer 0.2.5 is queued and runs
+  after the 00:00 UTC refill.
