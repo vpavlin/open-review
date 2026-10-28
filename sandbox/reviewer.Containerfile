@@ -74,6 +74,13 @@ RUN PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin pipx install mitmproxy >/dev
 # like a person, uid 1000 like a laptop's first user; Ubuntu's stock user goes.
 RUN userdel -r ubuntu 2>/dev/null; useradd -m -u 1000 -s /bin/bash pavel
 
+# The reviewer is a second account (a second person on the laptop, to the
+# module's eye). It runs things as pavel, the module's user, through a broker
+# root runs (pipeline/module_broker.py), not sudo: setuid does nothing under
+# strace. pavel can do nothing as it, so what the module runs can't touch the
+# reviewer's report or probes (open-review's own review, FR-2/FR-14).
+RUN useradd -m -u 1001 -s /bin/bash ondra && chmod 750 /home/pavel /home/ondra
+
 COPY disguise.sh bait.sh record.sh profiles.json /usr/local/sbin/
 RUN chmod +x /usr/local/sbin/disguise.sh /usr/local/sbin/bait.sh /usr/local/sbin/record.sh
 

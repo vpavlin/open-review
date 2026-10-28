@@ -19,7 +19,15 @@
 # Screenshots and the video are published with the report; take a shot at
 # every step that shows something, named for what it shows.
 set -uo pipefail
-S=/run/desk; M=/run/media; U=$HOME/.local/share/Logos/LogosBasecamp
+S=/run/desk; M=/run/media
+# In a review desk runs as the reviewer (ondra), and Basecamp, with the module
+# in it, as the module's user (pavel), through as-module: the module can't
+# reach the reviewer's report or probes. Alone (a test), desk does it itself.
+if [ "$(id -un)" = ondra ]; then
+  AS=(as-module); U=/home/pavel/.local/share/Logos/LogosBasecamp; BCLOG=/run/modlog/basecamp.log
+else
+  AS=(); U=$HOME/.local/share/Logos/LogosBasecamp; BCLOG=$M/basecamp.log
+fi
 mkdir -p "$S" "$M"
 export DISPLAY=:99 QT_QPA_PLATFORM=xcb WAYLAND_DISPLAY= QT_FORCE_STDERR_LOGGING=1
 res=$(jq -r '.resolution // .res // empty' /run/behaviour/disguise.json 2>/dev/null); res=${res:-1920x1200}
@@ -28,8 +36,11 @@ W=${res%x*}; H=${res#*x}
 bc_up() {
   # In a review, root has unpacked Basecamp already, where the user can't change it.
   [ -d /opt/bc/squashfs-root ] || { mkdir -p /opt/bc && cd /opt/bc && /opt/basecamp/Basecamp.AppImage --appimage-extract >/dev/null 2>&1; cd - >/dev/null; }
-  mkdir -p "$U/modules" "$U/plugins"
-  ( cd /root && exec /opt/bc/squashfs-root/AppRun --user-dir "$U" >>"$M/basecamp.log" 2>&1 ) &
+  "${AS[@]}" mkdir -p "$U/modules" "$U/plugins"
+  # Detached from the caller's terminal: as-module hands the command its
+  # caller's stdin/stdout, and Basecamp holding them kept "desk start" (and
+  # pi's tool call with it) from ever returning.
+  ( cd / && exec "${AS[@]}" bash -c 'cd ~ && exec /opt/bc/squashfs-root/AppRun --user-dir "$1" >>"$2" 2>&1' _ "$U" "$BCLOG" ) </dev/null >/dev/null 2>&1 &
   echo $! > "$S/bc.pid"
   # Basecamp is up when its window is mapped; give its modules a moment more.
   for _ in $(seq 1 90); do xdotool search --onlyvisible --name Basecamp >/dev/null 2>&1 && break; sleep 1; done
@@ -43,8 +54,8 @@ bc_up() {
 }
 bc_down() {
   [ -f "$S/bc.pid" ] || return 0
-  pkill -TERM -f '/opt/bc/squashfs-root' 2>/dev/null; sleep 3
-  pkill -KILL -f '/opt/bc/squashfs-root' 2>/dev/null; rm -f "$S/bc.pid"
+  "${AS[@]}" pkill -TERM -f '/opt/bc/squashfs-root/' 2>/dev/null; sleep 3
+  "${AS[@]}" pkill -KILL -f '/opt/bc/squashfs-root/' 2>/dev/null; rm -f "$S/bc.pid"
 }
 install_one() {  # unpack one .lgx the way lgpm does
   local lgx=$1 t name type dest
@@ -73,7 +84,9 @@ try:
 except Exception: pass
 PY
   read -r t0 max < /run/logs/clock 2>/dev/null || return 0
-  used=$(( ($(date +%s)-t0)/60 )); left=$(( max-used )); by=$(( max-40 ))
+  # The report starts at about three quarters of the time (minute 110 of
+  # 150); "the limit less 40" was below zero for a short review.
+  used=$(( ($(date +%s)-t0)/60 )); left=$(( max-used )); by=$(( max*11/15 ))
   if [ "$used" -ge "$by" ]; then
     echo "[clock] ${used} of ${max} min used, ${left} left: STOP TESTING and write the report now"
   else
@@ -97,7 +110,7 @@ ocr() {  # one line per text line on screen: "x,y  text" (x,y = its centre)
     } END {for(i=1;i<=n;i++){k=o[i]; printf "%d,%d\t%s\n", (l[k]+r[k])/4, (tp[k]+b[k])/4, t[k]}}'
 }
 
-[ "${1:-}" != time ] && clock
+[ "${1:-}" != time ] && [ "${1:-}" != _install ] && clock
 case "${1:-}" in
   time) clock ;;
   start)
@@ -116,6 +129,11 @@ case "${1:-}" in
   install)
     lgx=${2:?desk install <file.lgx>}
     bc_down
+    # The unpacking is the module's: done as its user, by desk itself.
+    "${AS[@]}" bash /pipeline/desk.sh _install "$lgx" || exit 1
+    bc_up; ocr | head -40 ;;
+  _install)
+    lgx=${2:?}
     # Its dependencies first, as Basecamp's own install does; the pipeline
     # fetched them from the official catalogue into /run/lgx/deps.
     for d in /run/lgx/deps/*.lgx; do
@@ -126,8 +144,7 @@ case "${1:-}" in
       fi
       install_one "$d"
     done
-    install_one "$lgx" || exit 1
-    bc_up; ocr | head -40 ;;
+    install_one "$lgx" || exit 1 ;;
   restart) bc_down; bc_up; ocr | head -40 ;;
   read) ocr ;;
   click) xdotool mousemove "$2" "$3" click 1; sleep 1.5 ;;
@@ -141,7 +158,7 @@ case "${1:-}" in
   shot)
     f="$M/$(nextshot)-${2:-screen}.png"
     ffmpeg -loglevel error -y -f x11grab -video_size "${W}x${H}" -i :99 -frames:v 1 "$f" && echo "desk: $f" ;;
-  log) tail -n "${2:-40}" "$M/basecamp.log" ;;
+  log) tail -n "${2:-40}" "$BCLOG" ;;
   stop)
     bc_down
     if [ -f "$S/ffmpeg.pid" ]; then

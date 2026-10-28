@@ -11,7 +11,9 @@ def readf(p):
 strace=readf("strace.log"); dns=readf("dns.log"); build=readf("build.out")
 bait=json.load(open(os.path.join(B,"bait.json"))) if os.path.exists(os.path.join(B,"bait.json")) else {}
 # files opened (and failed) outside the module's own tree
-opens=set(re.findall(r'openat?\([^,]*,\s*"([^"]+)"',strace))
+# Opened, not just tried: a refused open (the reviewer can't read the
+# module's home) is not a read.
+opens=set(re.findall(r'openat?\([^,]*,\s*"([^"]+)"[^\n]*\)\s*=\s*\d+',strace))
 fails=set(re.findall(r'openat?\([^)]*"([^"]+)"[^)]*=\s*-1',strace))
 bait_read=[p for p in bait if p in opens]
 # hosts contacted by name (dns sink) and raw IP connects
@@ -37,6 +39,14 @@ connects=sorted(connects)
 # it is the bait leaving the box, and where it went.
 requests=[]; canary_sent=[]; tls_refused=[]
 canaries={v:k for k,v in bait.items()} if isinstance(bait,dict) else {}
+# The reviewer's own requests have their own proxy and log; listed, never
+# counted against the module.
+reviewer_requests=[]
+for line in readf("proxy-reviewer.jsonl").splitlines():
+    try: q=json.loads(line)
+    except Exception: continue
+    if "sandbox-check=" in q.get("url",""): continue
+    reviewer_requests.append(f'{q.get("method","")} {q.get("url","")}')
 for line in readf("proxy.jsonl").splitlines():
     try: q=json.loads(line)
     except Exception: continue
@@ -55,6 +65,7 @@ summary={
  "connected_addresses": connects[:200],
  "http_requests": requests[:300],
  "bait_sent_out": canary_sent,
+ "reviewer_requests": reviewer_requests[:100],
  "tls_refused_by_client": sorted(set(tls_refused))[:50],
  "read_secret_then_contacted_external_host": exfil,
  "build_tail": build[-1500:],
