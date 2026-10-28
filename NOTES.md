@@ -182,3 +182,34 @@ A running log: newest last. What was done, why, and what was found.
 - **Usage:** 200 calls, 42.8 M input tokens (41.3 M cached), 105 k output,
   33 min of model time, **$0.90**, 2 retries, 0 provider failures.
 - Published: /forumer-b9907523bffc/ (the earlier attempts beside it).
+
+## 2026-10-28: a spend cap, open-review reviews itself, root taken away
+
+- **agentic-job (cgwalters)** compared: different job (safe agents on your
+  own repo vs. evidence about a third-party module), but worth learning
+  from: probes of its own hardening, per-run spend caps at a broker, a key
+  off the box, blunt limits. Adopted: the self-check, the cap, root taken
+  away, and (ours) a recording proxy. Key off the box: post-PoC.
+- **1 DIEM per review** (Václav). The gateway prices each reply, refuses the
+  review's token past 0.8 and a write-up token past 1.0, serves only the
+  review's model. The report shows Venice's real charge (balance before and
+  after, whole account) beside the computed one, and where the spend went.
+  Compaction left off: its summary calls are uncached and cost more.
+- **open-review on itself** (6c46c82): 16 findings in 14 min for 0.208 DIEM
+  (computed 0.205). Critical: the host-side renderer followed symlinks out
+  of the run dir, so a module could have published the Venice key; no
+  published review contained it; fixed with dir-fd walking, O_NOFOLLOW,
+  regular files only. Also fixed: shell injection from URLs, the model not
+  pinned at the gateway, a 40-min outer timeout that did nothing (bash as
+  PID 1 ignores TERM), the DNS sink not wired in since the move, raw-IP
+  connects unreported, desk path traversal, a malformed report.json
+  stopping publication (32537c1).
+- **Root taken away** (d80d804): pi and the module run as `pavel` (uid
+  1000, no sudo); root keeps the disguise, bait, DNS sink, strace, screen,
+  recorder and a transparent mitmproxy that the user's 80/443 is redirected
+  to. 20 self-checks. The leaky control, reviewed for real at a 0.15 cap:
+  Critical, and the proxy recorded the POST of all three bait files to
+  example.com/ingest; 0.058 DIEM.
+- Gotchas: my own `pkill -f` and `pgrep -f` matched the shells running them
+  (twice); a backstop sleep held review.sh's pipe open; a `grep -c` with no
+  match ended an `&&` chain before an edit, which looked applied.
