@@ -5,6 +5,25 @@
 #   review.sh <repo-url> [<commit>] [<lgx-url>]
 set -uo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
+STATE=/home/reviewer/.review
+
+# One review at a time, and a review runs from its own copy of the pipeline.
+# On 2026-10-28 a deploy rewrote review-in-sandbox.sh under a sandbox still
+# executing it (bash reads a script as it goes: "syntax error near
+# unexpected token do"), and that sandbox had outlived a stop whose pkill -f
+# matched the stopping shell itself.
+if [ -z "${REVIEW_SNAPSHOT:-}" ]; then
+  mkdir -p "$STATE"
+  exec 9>"$STATE/lock"
+  flock -n 9 || { echo "a review is already running (review-stop.sh ends it)"; exit 1; }
+  # Whatever an earlier, interrupted review left: no review holds the lock now.
+  for c in $(podman ps -q --filter ancestor=localhost/open-reviewer:latest); do podman kill "$c" >/dev/null; done
+  SNAP=$STATE/pipeline-$(date -u +%Y%m%d-%H%M%S)
+  cp -a "$HERE" "$SNAP"
+  ls -d "$STATE"/pipeline-* | head -n -5 | xargs -r rm -rf
+  echo $$ > "$STATE/pid"
+  REVIEW_SNAPSHOT=1 exec bash "$SNAP/review.sh" "$@"
+fi
 IMG=localhost/open-reviewer:latest
 BASECAMP=/home/reviewer/sandbox/Basecamp.AppImage
 REPO=${1:?repo url}; COMMIT=${2:-HEAD}; LGX=${3:-}
