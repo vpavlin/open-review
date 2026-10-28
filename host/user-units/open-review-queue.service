@@ -1,0 +1,13 @@
+[Unit]
+Description=open-review: run queued reviews one at a time, within the day's model budget
+After=network-online.target
+
+[Service]
+ExecStart=/usr/bin/python3 %h/pipeline/queue.py run
+Restart=always
+RestartSec=30
+Environment=REVIEW_BASE=http://77.237.236.27
+Environment=PATH=/usr/local/bin:/usr/bin:/bin:%h/.local/bin
+
+[Install]
+WantedBy=default.target
