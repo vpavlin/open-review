@@ -13,7 +13,9 @@ REPO=$(cd "$(dirname "$0")/.." && pwd)
 U=reviewer; UH=/home/$U
 BASECAMP_URL=https://github.com/logos-co/logos-basecamp/releases/download/0.3.2/LogosBasecamp-Desktop-v0.3.2-f2fae6-x86_64.AppImage
 BASECAMP_SHA=983de0c7e282155d93c7e338da78e5b1a7a32112390a89be48d44700c3ade012
-as_u() { sudo -iu "$U" env XDG_RUNTIME_DIR=/run/user/$(id -u "$U") bash -lc "$1"; }
+# As the reviewer user, with its systemd and pipefail: sudo -i re-parses the
+# line in a login shell, so what needs its environment goes in a script.
+as_u() { sudo -iu "$U" env XDG_RUNTIME_DIR=/run/user/$(id -u "$U") bash -lc "set -o pipefail; $1"; }
 apt-get -qq -y install rsync >/dev/null
 
 echo "== the pipeline and the sandbox, from $(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo 'this copy')"
@@ -45,14 +47,7 @@ chown -R $U:$U "$UH/.config"
 as_u "systemctl --user daemon-reload && systemctl --user enable --now open-review-queue.service && systemctl --user restart shrooms-agent.service"
 
 echo "== the intake session"
-as_u 'S=$XDG_RUNTIME_DIR/shrooms-agent/agent.sock; for i in $(seq 1 20); do [ -S $S ] && break; sleep 1; done
-  if ! curl -sf --unix-socket $S http://x/v1/sessions | grep -q "\"open-review\""; then
-    curl -sf --unix-socket $S -X POST http://x/v1/sessions -H "Content-Type: application/json" \
-      -d "{\"name\":\"open-review\",\"dir\":\"$HOME/intake\",\"harness\":\"pi\"}" >/dev/null
-  fi
-  curl -sf --unix-socket $S -X PATCH http://x/v1/sessions/open-review -H "Content-Type: application/json" \
-    -d "{\"model\":\"venice/deepseek-v4-1-flash-1017\",\"skills\":[{\"name\":\"reviews\",\"description\":\"queues adversarial reviews of Logos Basecamp modules\"}],\"responsibilities\":[\"open-review intake: queues module reviews, reports where they stand\"]}" >/dev/null
-  echo "open-review session: $(curl -sf --unix-socket $S http://x/v1/sessions | python3 -c "import json,sys; print([s[\"state\"] for s in json.load(sys.stdin)[\"sessions\"] if s[\"name\"]==\"open-review\"])")"'
+as_u "bash ~/pipeline/intake-session.sh"
 
 echo "== left to do by hand"
 if [ -s "$UH/.pi/agent/.env" ] && grep -q '^VENICE_INFERENCE_KEY=.' "$UH/.pi/agent/.env"; then
