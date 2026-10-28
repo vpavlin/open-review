@@ -40,7 +40,8 @@ def main():
               t.add(p, arcname=os.path.join(name, os.path.relpath(p, dest)), recursive=False)
   data = buf.getvalue()
   req = urllib.request.Request(API + "/data", data=data, method="POST", headers={
-      "Content-Type": "application/gzip",
+      # The node refuses application/gzip ("not a valid MIME type").
+      "Content-Type": "application/octet-stream",
       "Content-Disposition": f'attachment; filename="{name}.tar.gz"'})
   cid = urllib.request.urlopen(req, timeout=600).read().decode().strip()
   chain = ""
