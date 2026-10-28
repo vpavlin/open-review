@@ -26,6 +26,26 @@ can no longer touch the behaviour record, the logs or the video). Still open:
 - **FR-16:** anything staged in the run's evidence/media dirs is published
   same-origin; publish a fixed list of file types only.
 
+## Community submissions through WhisperBox (atlas/whisperbox, 2026-10-28)
+- **Phase 1, a form:** Václav creates a WhisperBox form; an always-on
+  headless `whisperbox_core` under logosctl on the review host is made its
+  co-owner (`addCoOwner`), reads answers with `getDecryptedResponses`,
+  validates them (repo URL, 40-hex commit, optional .lgx URL), queues them,
+  and replies privately to the submitter (`replyToResponse`: "queued #N",
+  then the report link), with receipts on (`setAutoReceipts`). Its own
+  WHISPERBOX_CORE_DATA, HOME and LOGOSCTL_CONFIG_DIR; arguments with `str:`;
+  recipe in WhisperBox's docs/BUILD.md (review-2026-10-22 branch).
+- **Needs WhisperBox 0.5.0** (signed answers; built, not released): 0.4.2
+  doesn't sign answers on open forms, so a submitter's identity can't be
+  trusted for per-submitter limits. Open forms are Sybil-cheap; real limits
+  need an address list or, later, token gating.
+- **Phase 2, votes: not in WhisperBox.** Answers are sealed to the owner, so
+  no one else can verify a tally. Public signed votes: a small LEZ program
+  (LNS holdings are on LEZ; one vote per account, a public tally), or a
+  dedicated app. Linking a WhisperBox address to a LEZ account needs a proof
+  that doesn't exist yet (LEZ keys don't sign messages).
+- Under RLN, every reply costs the bot's node message budget.
+
 ## Learnt from cgwalters-forge/agentic-job
 - **Throwaway model keys:** a per-review key minted by a broker off this box,
   revoked at the end (post-PoC; the key on the review VM is fine for now).
