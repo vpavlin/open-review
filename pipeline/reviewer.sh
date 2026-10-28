@@ -28,7 +28,11 @@ BC_MNT=(); [ -x "$BASECAMP" ] && BC_MNT=(-v "$BASECAMP:/opt/basecamp/Basecamp.Ap
 # passed to bash as PID 1, which ignores it: "timeout 2400" did nothing at
 # all (FR-6, 2026-10-28).
 NAME=review-$slug-$$
-( sleep $(( (${REVIEW_MAX_MIN:-150}+40)*60 )); podman kill "$NAME" >/dev/null 2>&1 ) & BACKSTOP=$!
+# Its own output closed and its sleep ended with it: a sleep left holding
+# the pipe kept review.sh waiting after the review ended (2026-10-28).
+( exec >/dev/null 2>&1 </dev/null
+  sleep $(( (${REVIEW_MAX_MIN:-150}+40)*60 )) & s=$!; trap 'kill $s; exit' TERM
+  wait $s; podman kill "$NAME" ) & BACKSTOP=$!
 podman run --rm --name "$NAME" --hostname dell-xps --cap-add SYS_ADMIN --network bridge \
   -e GATEWAY_PORT="$PORT" -e GATEWAY_URL="http://host.containers.internal:$PORT" -e REVIEW_TOKEN="$TOKEN" -e REPORT_TOKEN="$REPORT" -e REVIEW_MAX_MIN="${REVIEW_MAX_MIN:-150}" -e REVIEW_MODEL="$REVIEW_MODEL" \
   -v "$RUN:/run:z" -v "$HERE:/pipeline:ro" "${BC_MNT[@]}" "$IMG" \
