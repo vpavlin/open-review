@@ -50,6 +50,9 @@ install_one() {  # unpack one .lgx the way lgpm does
   t=$(mktemp -d)
   tar xzf "$lgx" -C "$t" || { echo "desk: $lgx is not an lgx (gzip tar)"; rm -rf "$t"; return 1; }
   name=$(jq -r .name "$t/manifest.json"); type=$(jq -r .type "$t/manifest.json")
+  # The manifest is the module's: a name like "../../x" made rm -rf and the
+  # copy land outside the plugins folder (FR-8, 2026-10-28).
+  [[ "$name" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}$ && "$name" != *..* ]] || { echo "desk: refusing module name \"$name\""; rm -rf "$t"; return 1; }
   case "$type" in ui_qml|ui) dest="$U/plugins/$name";; *) dest="$U/modules/$name";; esac
   [ -d "$t/variants/linux-amd64" ] || { echo "desk: no linux-amd64 variant in $lgx"; rm -rf "$t"; return 1; }
   rm -rf "$dest"; mkdir -p "$dest"

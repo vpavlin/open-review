@@ -11,6 +11,11 @@ def log(tag,msg): LOG.write(f"{time.strftime('%H:%M:%S')} {tag} {msg}\n"); LOG.f
 ALLOW=("registry.npmjs.org","npmjs.org","github.com","githubusercontent.com","nodejs.org",
        "debian.org","ubuntu.com","pypi.org","pythonhosted.org","deb.nodesource.com","cloudflare.com")
 UP=("1.1.1.1",53)
+# "forward" (default): every name is logged and resolved, so the module works
+# as it would for a user (forumer's node needs logos.dev). "sinkhole": only
+# the build hosts resolve and the rest land on the local sink, which logs
+# what is sent; the module's own networking then fails.
+MODE=(sys.argv[2] if len(sys.argv)>2 else "forward")
 def qname(d,o):
     p=[]
     while d[o]: n=d[o]; p.append(d[o+1:o+1+n].decode('latin1')); o+=1+n
@@ -20,7 +25,7 @@ def dns():
     while True:
         try:
             data,addr=s.recvfrom(512); qn,off=qname(data,12)
-            allowed=any(qn==a or qn.endswith("."+a) for a in ALLOW)
+            allowed=MODE=="forward" or any(qn==a or qn.endswith("."+a) for a in ALLOW)
             log("dns", qn+("" if allowed else "  [sinkholed]"))
             if allowed:
                 try:

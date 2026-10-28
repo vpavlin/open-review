@@ -5,13 +5,53 @@
 #   final  when done: index.html (the report + evidence), and live.html stops
 #          refreshing and points at it.
 # Everything from the module is escaped; nothing is served as HTML or script.
-import sys,os,json,html,glob,shutil,time
+import sys,os,json,html,glob,shutil,time,stat
 run,dest,slug=sys.argv[1:4]; mode=sys.argv[4] if len(sys.argv)>4 else "final"
 os.makedirs(dest,exist_ok=True)
 def esc(x): return html.escape(str(x))
+# Everything under the run dir was written, or could have been, by the module
+# under review, and this runs on the host, where the Venice key is. So a
+# file is opened one path component at a time, none of them a symlink, and
+# only if it is a regular file: a symlink in media/ pointing at the key's
+# file would otherwise be copied into the public review (open-review's own
+# review, FR-1, 2026-10-28). Walking with dir_fd also leaves no window to
+# swap a directory for a link while the module is still running.
+RUNFD=os.open(run,os.O_RDONLY|os.O_DIRECTORY)
+def open_beneath(rel,mode="rb"):
+    parts=[x for x in os.path.normpath(rel).split(os.sep) if x not in ("",".")]
+    if not parts or ".." in parts: raise PermissionError(rel)
+    fd=os.dup(RUNFD)
+    try:
+        for d in parts[:-1]:
+            nfd=os.open(d,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW,dir_fd=fd); os.close(fd); fd=nfd
+        ffd=os.open(parts[-1],os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK,dir_fd=fd)
+    finally: os.close(fd)
+    if not stat.S_ISREG(os.fstat(ffd).st_mode): os.close(ffd); raise PermissionError(rel)
+    return os.fdopen(ffd,mode) if "b" in mode else os.fdopen(ffd,mode,encoding="utf-8",errors="replace")
+def exists_beneath(rel):
+    try: open_beneath(rel).close(); return True
+    except Exception: return False
+def copy_beneath(rel,to):
+    """Copy one regular file from the run dir; anything else is skipped."""
+    try:
+        with open_beneath(rel) as src, open(to,"wb") as out: shutil.copyfileobj(src,out,1<<20)
+        return True
+    except Exception: return False
+def files_beneath(sub):
+    """Regular files under run/sub, relative to run; links are not followed."""
+    out=[]
+    for root,dirs,files in os.walk(os.path.join(run,sub),followlinks=False):
+        for f in files:
+            out.append(os.path.relpath(os.path.join(root,f),run))
+    return sorted(out)
 def readf(p,n=200000):
-    try: return open(os.path.join(run,p),encoding="utf-8",errors="replace").read()[-n:]
-    except: return ""
+    try:
+        with open_beneath(p,"r") as f: return f.read()[-n:]
+    except Exception: return ""
+def readjson(p):
+    try:
+        with open_beneath(p,"r") as f: return json.load(f)
+    except Exception: return None
 CSS="body{max-width:60em;margin:1.5em auto;padding:0 1em;font:15px/1.5 system-ui,sans-serif;background:#0d0f12;color:#d8dde3}a{color:#6cf}h1,h2{color:#9fe}pre{white-space:pre-wrap;word-break:break-word;background:#15181d;padding:.8em;border-radius:6px;overflow:auto}table{border-collapse:collapse}td,th{border:1px solid #333;padding:.3em .6em}.sev{font-weight:bold}.red{color:#f66}"
 def write(name,body): open(os.path.join(dest,name),"w").write(body)
 MODEL=(readf(os.path.join("logs","model")).strip() or "venice/deepseek-v4-1-flash-uncensored")
@@ -21,10 +61,9 @@ PRICES={"deepseek-v4-1-flash-uncensored":(0.33,0.00825,1.32),
         "deepseek-v4-1-flash-1017":(0.30,0.0075,1.20),"deepseek-v4-1-flash":(0.30,0.0075,1.20)}
 def usage_stats(run):
     import glob
-    p=os.path.join(run,"gateway.jsonl")
     calls=0; pin=0; pout=0; cached=0; ms=0; errors=0; retries=0
-    if os.path.exists(p):
-        for line in open(p,encoding="utf-8",errors="replace"):
+    if exists_beneath("gateway.jsonl"):
+        for line in open_beneath("gateway.jsonl","r"):
             try: r=json.loads(line)
             except: continue
             if "retry_in_s" in r: retries+=1; continue
@@ -43,16 +82,17 @@ def usage_stats(run):
 
 if mode=="live":
     def latest_shot():
-        shots=sorted(glob.glob(os.path.join(run,"media","*.png")))
+        shots=[x for x in files_beneath("media") if x.endswith(".png")]
         if not shots: return ""
         os.makedirs(os.path.join(dest,"media"),exist_ok=True)
-        f=os.path.basename(shots[-1]); shutil.copy(shots[-1],os.path.join(dest,"media",f))
+        f=os.path.basename(shots[-1])
+        if not copy_beneath(shots[-1],os.path.join(dest,"media",f)): return ""
         return f"<p><b>latest screen:</b> {esc(f[3:-4])}<br><img src='media/{esc(f)}' style='max-width:100%;border:1px solid #333'></p>"
     def last_line(path):
         # gateway.jsonl carries the whole conversation in every request and
         # runs to tens of MB; the status needs only its last line.
         try:
-            with open(path,"rb") as f:
+            with open_beneath(path) as f:
                 f.seek(0,2); end=f.tell(); step=1<<16; pos=end; buf=b""
                 while pos>0:
                     pos=max(0,pos-step); f.seek(pos); buf=f.read(end-pos)
@@ -63,11 +103,11 @@ if mode=="live":
         pl=readf(os.path.join("logs","pipeline.log")).strip().splitlines()
         started=pl[0][:8] if pl else ""
         stages=[l[9:].split()[0] if l[9:].startswith("lgx ") else l[9:] for l in pl if not l[9:].startswith("review ")]
-        gw=os.path.join(run,"gateway.jsonl"); calls=0; ctx=""
-        if os.path.exists(gw):
-            with open(gw,"rb") as f: calls=sum(1 for _ in f)
+        calls=0; ctx=""
+        if exists_beneath("gateway.jsonl"):
+            with open_beneath("gateway.jsonl") as f: calls=sum(1 for _ in f)
             try:
-                r=(json.loads(last_line(gw)).get("response") or {})
+                r=(json.loads(last_line("gateway.jsonl")).get("response") or {})
                 ctx=f" · context {((r.get('usage') or {}).get('prompt_tokens') or 0):,} tokens"
             except Exception: pass
         return (f"<p>started {esc(started)} UTC · now {time.strftime('%H:%M:%S',time.gmtime())} UTC · "
@@ -79,8 +119,7 @@ if mode=="live":
     steps=[x for x in t.split("\n▶ ") if x.strip()]
     shown="".join(f"<pre>{esc(('▶ ' if i or len(steps)>1 else '')+x.strip()[:2500])}</pre>"
                   for i,x in enumerate(reversed(steps[-6:])))
-    try: shutil.copy(os.path.join(run,"live.txt"),os.path.join(dest,"live.txt"))
-    except Exception: pass
+    copy_beneath("live.txt",os.path.join(dest,"live.txt"))
     write("live.html", f"""<!doctype html><meta charset=utf-8><meta http-equiv=refresh content=3>
 <meta name=viewport content='width=device-width,initial-scale=1'><title>reviewing {esc(slug)}…</title>
 <style>{CSS}</style><h1>Reviewing {esc(slug)}</h1>
@@ -90,30 +129,36 @@ if mode=="live":
 
 # final: copy raw evidence (served as text/json, never html)
 for sub in ("logs","checks","build","behaviour","media"):
-    s=os.path.join(run,sub)
-    if os.path.isdir(s): shutil.copytree(s,os.path.join(dest,sub),dirs_exist_ok=True)
-for f in ("report.md","live.txt","session.log","gateway.jsonl"):
-    p=os.path.join(run,f)
-    if os.path.exists(p): shutil.copy(p,dest)
+    for rel in files_beneath(sub):
+        to=os.path.join(dest,rel); os.makedirs(os.path.dirname(to),exist_ok=True)
+        copy_beneath(rel,to)
+for f in ("report.md","live.txt","session.log","gateway.jsonl","report.json"):
+    copy_beneath(f,os.path.join(dest,f))
 # hash-chain + meta
 import hashlib
-def h(p):
-    try: return hashlib.sha256(open(p,'rb').read()).hexdigest()
-    except: return ""
+def h(rel):
+    try:
+        d=hashlib.sha256()
+        with open_beneath(rel) as f:
+            for b in iter(lambda: f.read(1<<20), b""): d.update(b)
+        return d.hexdigest()
+    except Exception: return ""
 prev=""
-for p in sorted(glob.glob(run+'/**/*',recursive=True)):
-    if os.path.isfile(p): prev=hashlib.sha256((prev+h(p)).encode()).hexdigest()
+for rel in files_beneath("."):
+    v=h(rel)
+    if v: prev=hashlib.sha256((prev+v).encode()).hexdigest()
 write("chain.txt",prev+"\n")
 def media_html():
-    md=os.path.join(run,"media"); out=[]
-    if os.path.exists(os.path.join(md,"session.mp4")):
+    # What was copied into the published folder: regular files only.
+    md=os.path.join(dest,"media"); out=[]
+    if os.path.isfile(os.path.join(md,"session.mp4")):
         out.append("<video controls preload=metadata src='media/session.mp4' style='max-width:100%'></video>"
                    "<p style='color:#888'>The whole session in Basecamp, recorded in the sandbox.</p>")
     for f in sorted(glob.glob(os.path.join(md,"*.png"))):
         b=os.path.basename(f); cap=b[3:-4].replace("-"," ") if b[:2].isdigit() else b[:-4]
         out.append(f"<figure><img src='media/{esc(b)}' style='max-width:100%;border:1px solid #333'><figcaption>{esc(cap)}</figcaption></figure>")
     note=os.path.join(md,"GUI-did-not-run.txt")
-    if os.path.exists(note): out.append("<pre>"+esc(open(note).read())+"</pre>")
+    if os.path.isfile(note): out.append("<pre>"+esc(open(note,errors="replace").read()[:4000])+"</pre>")
     return ("<h2>Screenshots and recording</h2>"+"".join(out)) if out else ""
 def failed_html():
     return ("<div style='border:2px solid #f66;padding:.6em 1em;border-radius:6px'>"
@@ -121,17 +166,20 @@ def failed_html():
             "<p>This is <b>not a verdict on the module</b>, good or bad: the review was not completed.</p>"
             f"<pre>{esc(FAILED)}</pre></div>")
 rep=None
-try: rep=json.load(open(os.path.join(run,"report.json")))
-except: pass
-shutil.copy(os.path.join(run,"report.json"),dest) if os.path.exists(os.path.join(run,"report.json")) else None
+# Written in the sandbox: any shape at all. Not an object, it is no report
+# (a malformed one stopped publication: FR-9).
+rep=readjson("report.json")
+if not isinstance(rep,dict): rep=None
 beh={}
-try: beh=json.load(open(os.path.join(run,"behaviour","summary.json")))
-except: pass
+beh=readjson(os.path.join("behaviour","summary.json"))
+if not isinstance(beh,dict): beh={}
 repo=readf("logs/repo").strip(); commit=readf("logs/commit").strip()
 # findings table (richer schema)
 fr=""
-if rep and rep.get("findings"):
-    for f in rep["findings"]:
+def _list(v): return v if isinstance(v,list) else []
+if rep:
+    for f in _list(rep.get("findings"))[:200]:
+        if not isinstance(f,dict): continue
         cl=" red" if str(f.get("severity","")).lower() in ("critical","high") else ""
         conf=esc(f.get("confirmed",""))
         fr+=(f"<tr><td>{esc(f.get('id',''))}</td><td class='sev{cl}'>{esc(f.get('severity',''))}</td>"
@@ -144,9 +192,8 @@ def spend_by_activity():
     went on to run. This is what tells which part of a review to cut."""
     import re as _re
     cats={"reading the code":0.0,"builds and probes":0.0,"Basecamp (desk)":0.0,"writing the report":0.0,"other":0.0}
-    p=os.path.join(run,"gateway.jsonl")
-    if not os.path.exists(p): return ""
-    for line in open(p,encoding="utf-8",errors="replace"):
+    if not exists_beneath("gateway.jsonl"): return ""
+    for line in open_beneath("gateway.jsonl","r"):
         try: r=json.loads(line)
         except Exception: continue
         if "retry_in_s" in r or "budget_refused" in r: continue
@@ -168,19 +215,16 @@ def spend_by_activity():
     rows="".join(f"<tr><td>{esc(k)}</td><td>{v:.3f}</td><td>{100*v/tot:.0f}%</td></tr>" for k,v in cats.items() if v>0.0005)
     return f"<table><tr><th>went on</th><th>DIEM</th><th></th></tr>{rows}</table>"
 def budget_line():
-    try: d=json.load(open(os.path.join(run,"logs","spend.json")))
-    except Exception: return "no cap for this run"
-    hit=[ph for ph in ("testing","report") if os.path.exists(os.path.join(run,"logs",f"budget-spent-{ph}.txt"))]
+    d=readjson(os.path.join("logs","spend.json"))
+    if not isinstance(d,dict): return "no cap for this run"
+    hit=[ph for ph in ("testing","report") if exists_beneath(os.path.join("logs",f"budget-spent-{ph}.txt"))]
     return (f"{d['spent']:.3f} of {d['budget']:.2f} DIEM ({d['testing']:.2f} for testing)"
             + (f"; the {' and '.join(hit)} share ran out" if hit else ""))
 def charged():
     """What Venice actually took: the account's balance before the review
     minus after it. Whole account, so other use in the same window counts."""
-    try:
-        a=json.load(open(os.path.join(run,"logs","balance-start.json")))
-        b=json.load(open(os.path.join(run,"logs","balance-end.json")))
-    except Exception:
-        return "not recorded for this run"
+    a=readjson(os.path.join("logs","balance-start.json")); b=readjson(os.path.join("logs","balance-end.json"))
+    if not (isinstance(a,dict) and isinstance(b,dict)): return "not recorded for this run"
     if "error" in a or "error" in b: return "not recorded: "+esc(a.get("error") or b.get("error"))
     ne=a.get("next_epoch") or ""
     try:
@@ -205,8 +249,8 @@ usage=(f"<table><tr><th>model calls</th><td>{U['model_calls']}</td></tr>"
 if not U["recorded"]:
     usage=(f"<p>{U['model_calls']} model calls, {U['model_seconds']} s of model time. Token counts were not "
            "recorded for this run: the gateway didn't log streamed replies yet.</p>")
-ran="".join(f"<li>{esc(x)}</li>" for x in (rep.get("ran") or [])[:30]) if rep else ""
-nottested="".join(f"<li>{esc(x)}</li>" for x in (rep.get("not_tested") or [])[:30]) if rep else ""
+ran="".join(f"<li>{esc(x)}</li>" for x in _list(rep.get("ran"))[:30]) if rep else ""
+nottested="".join(f"<li>{esc(x)}</li>" for x in _list(rep.get("not_tested"))[:30]) if rep else ""
 behrow=""
 if beh.get("bait_files_read"): behrow+=f"<li class='red'>read bait: {esc(', '.join(beh['bait_files_read']))}</li>"
 if beh.get("contacted_hosts"): behrow+=f"<li>contacted: {esc(', '.join(beh['contacted_hosts']))}</li>"
@@ -219,8 +263,8 @@ write("index.html", f"""<!doctype html><meta charset=utf-8><meta name=viewport c
 <p><b>Repository:</b> <code>{esc(repo)}</code> @ <code>{esc(commit)}</code><br>
 <b>When:</b> {esc(time.strftime('%Y-%m-%d %H:%M UTC',time.gmtime()))} · <b>Model:</b> {esc(MODEL)}<br>
 <b>Sandbox:</b> container dressed as a laptop; the host kernel is not hidden.
-{('<br><b class=red>'+esc(readf(os.path.join('logs','timed-out.txt')))+'</b>') if os.path.exists(os.path.join(run,'logs','timed-out.txt')) else ''}
-{('<br><b style="color:#fa0">'+esc(readf(os.path.join('logs','written-after.txt')))+'</b>') if os.path.exists(os.path.join(run,'logs','written-after.txt')) else ''}
+{('<br><b class=red>'+esc(readf(os.path.join('logs','timed-out.txt')))+'</b>') if exists_beneath(os.path.join('logs','timed-out.txt')) else ''}
+{('<br><b style="color:#fa0">'+esc(readf(os.path.join('logs','written-after.txt')))+'</b>') if exists_beneath(os.path.join('logs','written-after.txt')) else ''}
 {'<br><b class=red>The repository contained text addressed to the reviewer.</b>' if rep and rep.get('repo_tried_to_instruct_reviewer') else ''}</p>
 {failed_html() if FAILED else f"<p><b>Summary:</b> {esc(rep.get('verdict_summary','(see report.md)')) if rep else '(see report.md)'}</p><h2>Findings</h2>{findings}"}
 {media_html()}

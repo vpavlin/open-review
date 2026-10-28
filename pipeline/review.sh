@@ -27,6 +27,13 @@ fi
 IMG=localhost/open-reviewer:latest
 BASECAMP=/home/reviewer/sandbox/Basecamp.AppImage
 REPO=${1:?repo url}; COMMIT=${2:-HEAD}; LGX=${3:-}
+# The submission's values reach a shell only as variables, and only in the
+# shape they should have: they were pasted into "bash -lc" strings, so a
+# quote in a URL ran commands on the review host (FR-4, 2026-10-28).
+url_ok(){ [[ "$1" =~ ^https://[A-Za-z0-9.-]+(/[A-Za-z0-9._~%+@:/-]*)?$ ]]; }
+if [[ "$REPO" != localdir:* ]] && ! url_ok "$REPO"; then echo "not a repository URL: $REPO"; exit 2; fi
+[[ "$COMMIT" =~ ^([0-9a-f]{7,40}|HEAD)$ ]] || { echo "not a commit: $COMMIT"; exit 2; }
+if [ -n "$LGX" ] && ! url_ok "$LGX"; then echo "not a package URL: $LGX"; exit 2; fi
 slug=$(printf '%s-%s' "$(basename "$REPO" .git)" "${COMMIT:0:12}" | tr -c 'A-Za-z0-9._-' -)
 RUN=/home/reviewer/runs/$slug; rm -rf "$RUN"; mkdir -p "$RUN"/{src,checks,build,behaviour,media,logs}
 DEST=/srv/reviews/$slug
@@ -37,7 +44,8 @@ if [ -e "$DEST/index.html" ]; then mv "$DEST" "$DEST-$(date -u -r "$DEST/index.h
 rm -rf "$DEST"; mkdir -p "$DEST"
 log(){ printf '%s %s\n' "$(date -u +%H:%M:%S)" "$*" | tee -a "$RUN/logs/pipeline.log"; }
 live(){ printf '%s\n' "$*" >> "$RUN/live.txt"; "$HERE/render.py" "$RUN" "$DEST" "$slug" live >/dev/null 2>&1 || true; }
-inbox(){ podman run --rm --network "$1" -v "$RUN:/run:z" -w /run "$IMG" bash -lc "$2"; }
+inbox(){ podman run --rm --network "$1" -e REPO -e COMMIT -e LGX -v "$RUN:/run:z" -w /run "$IMG" bash -lc "$2"; }
+export REPO COMMIT LGX
 
 : > "$RUN/live.txt"; live "# Reviewing $REPO @ $COMMIT"; live "starting…"
 log "review $REPO @ $COMMIT -> $RUN ; live at ${REVIEW_BASE:-http://REVIEW-HOST}/$slug/live.html"
@@ -46,7 +54,7 @@ live "## clone"; log "clone"
 if [[ "$REPO" == localdir:* ]]; then
   cp -a "${REPO#localdir:}/." "$RUN/src/" 2>/dev/null; echo "localdir" > "$RUN/logs/commit"
 else
-inbox bridge "git clone --quiet --filter=blob:none '$REPO' src 2>&1 | tail -3; cd src && git checkout --quiet '$COMMIT' 2>/dev/null; git rev-parse HEAD > /run/logs/commit 2>/dev/null; true"
+inbox bridge 'git clone --quiet --filter=blob:none -- "$REPO" src 2>&1 | tail -3; cd src && git checkout --quiet "$COMMIT" -- 2>/dev/null; git rev-parse HEAD > /run/logs/commit 2>/dev/null; true'
 fi
 echo "$REPO" > "$RUN/logs/repo"
 
@@ -55,7 +63,7 @@ echo "$REPO" > "$RUN/logs/repo"
 if [ -n "$LGX" ]; then
   live "## fetch the published package"; log "lgx $LGX"
   mkdir -p "$RUN/lgx"
-  inbox bridge "curl -sSfL --max-time 300 -o 'lgx/$(basename "$LGX")' '$LGX' && sha256sum lgx/*.lgx > logs/lgx.sha256" \
+  inbox bridge 'f=$(basename -- "$LGX" | tr -c "A-Za-z0-9._-" _); curl -sSfL --max-time 300 -o "lgx/$f" -- "$LGX" && sha256sum lgx/*.lgx > logs/lgx.sha256' \
     || live "  could not download $LGX"
   [ -s "$RUN/logs/lgx.sha256" ] && live "  $(cat "$RUN/logs/lgx.sha256")"
   # What it needs, from the official catalogue, fetched here so the sandbox's

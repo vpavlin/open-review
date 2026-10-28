@@ -14,6 +14,9 @@ B=/run/behaviour; mkdir -p "$B" /run/media
 /usr/local/sbin/disguise.sh /usr/local/sbin/profiles.json "$B/disguise.json" >/dev/null 2>&1 || true
 /usr/local/sbin/bait.sh /root "$B/bait.json" >/dev/null 2>&1 || true
 python3 /pipeline/dns_sink.py "$B/dns.log" & SINK=$!
+# Every lookup goes through the sink, which logs it and answers. Lost when
+# the reviewer moved into the sandbox, so nothing was recorded (FR-3).
+sleep 1; echo "nameserver 127.0.0.1" > /etc/resolv.conf
 
 # The reviewer's desktop: a screen, Basecamp and a recorder (see desk.sh).
 ln -sf /pipeline/desk.sh /usr/local/bin/desk
@@ -99,5 +102,5 @@ fi
 
 kill $SINK 2>/dev/null
 mkdir -p "$B"
-python3 /pipeline/analyse.py "$B" > "$B/summary.json" 2>"$B/analyse.err" || echo '{"error":"analyse"}' > "$B/summary.json"
+python3 /pipeline/analyse.py "$B" "${GW#http://}" > "$B/summary.json" 2>"$B/analyse.err" || echo '{"error":"analyse"}' > "$B/summary.json"
 echo "sandboxed review: done"

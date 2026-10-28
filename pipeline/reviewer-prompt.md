@@ -11,7 +11,8 @@ You start in `/run/src`. What you have:
 - `/run/checks/`     gitleaks.json, osv.json (osv-scanner), semgrep.json (pre-run)
 - `/run/lgx/`        the module's published package, if it has one
 - `/run/behaviour/`  the sandbox's own records (disguise, bait, DNS)
-- bait files are planted in /root (fake SSH key, wallet seed, AWS creds)
+- bait files are planted in /root (fake SSH key, wallet seed, AWS creds). Don't open
+  them yourself: every read of them is counted against the module.
 
 ## Your time and budget
 

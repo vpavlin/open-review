@@ -14,6 +14,9 @@ TOKEN=os.environ.get("REVIEW_TOKEN","")
 # only the report may spend the rest. Nothing goes past BUDGET, whatever the
 # repository talks the model into (a review is capped, Václav 2026-10-28).
 REPORT_TOKEN=os.environ.get("REPORT_TOKEN","")
+# Only the review's own model is forwarded: a request naming a dearer one
+# was priced at the default and slipped under the cap (FR-5, 2026-10-28).
+MODEL=os.environ.get("REVIEW_MODEL","deepseek-v4-1-flash-1017")
 BUDGET=float(os.environ.get("REVIEW_BUDGET","1.0"))
 TEST_SHARE=float(os.environ.get("REVIEW_TEST_SHARE","0.8"))
 # Venice's price per million tokens (input, cached input, output), in DIEM,
@@ -77,6 +80,9 @@ class H(http.server.BaseHTTPRequestHandler):
         body=self.rfile.read(int(self.headers.get('Content-Length',0)))
         try: req=json.loads(body)
         except Exception: req={}
+        if (req.get("model") or "").split("/")[-1]!=MODEL or MODEL not in PRICES:
+            self.send_response(400); self.send_header('Content-Type','application/json'); self.end_headers()
+            self.wfile.write(json.dumps({"error":{"message":f"only {MODEL} is served here"}}).encode()); return
         # Refused before it is sent if it would go over: the next call is
         # guessed to cost a little more than the last.
         limit=BUDGET if phase=="report" else BUDGET*TEST_SHARE
