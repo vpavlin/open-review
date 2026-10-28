@@ -254,7 +254,13 @@ nottested="".join(f"<li>{esc(x)}</li>" for x in _list(rep.get("not_tested"))[:30
 behrow=""
 if beh.get("bait_files_read"): behrow+=f"<li class='red'>read bait: {esc(', '.join(beh['bait_files_read']))}</li>"
 if beh.get("contacted_hosts"): behrow+=f"<li>contacted: {esc(', '.join(beh['contacted_hosts']))}</li>"
-if beh.get("read_secret_then_contacted_external_host"): behrow+="<li class='red'>read a secret, then contacted an external host</li>"
+for x in (beh.get("bait_sent_out") or [])[:20]:
+    if isinstance(x,dict): behrow+=f"<li class='red'><b>sent bait out:</b> {esc(x.get('bait',''))} → {esc(x.get('to',''))}</li>"
+if beh.get("read_secret_then_contacted_external_host") and not beh.get("bait_sent_out"): behrow+="<li class='red'>read a secret, then contacted an external host</li>"
+reqs=[x for x in (beh.get("http_requests") or []) if isinstance(x,str)]
+if reqs: behrow+=f"<li>HTTP(S) requests, recorded by the proxy ({len(reqs)}): <ul>"+"".join(f"<li><code>{esc(x)}</code></li>" for x in reqs[:40])+("<li>… the rest in behaviour/proxy.jsonl</li>" if len(reqs)>40 else "")+"</ul></li>"
+if beh.get("tls_refused_by_client"): behrow+=f"<li>refused the recording proxy's certificate (pins or brings its own trust): {esc(', '.join(beh['tls_refused_by_client']))}</li>"
+if beh.get("connected_addresses"): behrow+=f"<li>connected to {len(beh['connected_addresses'])} address(es): {esc(', '.join(beh['connected_addresses'][:15]))}</li>"
 write("live.html", f"""<!doctype html><meta charset=utf-8><title>{esc(slug)} — done</title><style>{CSS}</style>
 <h1>{esc(slug)}</h1><p>Review finished. <a href="index.html">Read the report →</a></p>""")
 write("index.html", f"""<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>

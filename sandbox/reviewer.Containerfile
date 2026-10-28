@@ -63,6 +63,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libsodium-dev libsqlite3-dev nlohmann-json3-dev libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
+# The recording proxy, and the firewall that sends the user's web traffic to
+# it; both root's, out of the user's reach.
+RUN apt-get update && apt-get install -y --no-install-recommends iptables \
+    && rm -rf /var/lib/apt/lists/*
+RUN PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin pipx install mitmproxy >/dev/null
+
+# The reviewer and the module run as an ordinary user, with no sudo: root in
+# the sandbox keeps the instruments (after agentic-job: take root away). Named
+# like a person, uid 1000 like a laptop's first user; Ubuntu's stock user goes.
+RUN userdel -r ubuntu 2>/dev/null; useradd -m -u 1000 -s /bin/bash pavel
+
 COPY disguise.sh bait.sh record.sh profiles.json /usr/local/sbin/
 RUN chmod +x /usr/local/sbin/disguise.sh /usr/local/sbin/bait.sh /usr/local/sbin/record.sh
 

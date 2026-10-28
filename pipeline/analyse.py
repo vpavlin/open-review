@@ -32,11 +32,30 @@ for m in re.finditer(r'connect\([^,]*,\s*\{sa_family=AF_INET6?,([^}]*)\}',strace
 connects=sorted(connects)
 # did a canary leave? (the sink would have logged the body if TLS allowed; here
 # we flag read-then-contact, the strongest we capture without TLS MITM)
-exfil = bool(bait_read) and bool(ext_hosts or connects)
+# What the recording proxy saw: every HTTP(S) request the user made, and
+# whether a bait canary was in one. A canary in a request is not inference:
+# it is the bait leaving the box, and where it went.
+requests=[]; canary_sent=[]; tls_refused=[]
+canaries={v:k for k,v in bait.items()} if isinstance(bait,dict) else {}
+for line in readf("proxy.jsonl").splitlines():
+    try: q=json.loads(line)
+    except Exception: continue
+    if q.get("tls_refused_by_client"):
+        tls_refused.append(q.get("sni") or q.get("server","")); continue
+    url=q.get("url","")
+    if "sandbox-check=" in url: continue      # the sandbox's own self-check
+    requests.append(f'{q.get("method","")} {url} ({q.get("sent_bytes",0)} B sent, {q.get("status",q.get("error",""))})')
+    for c,path in canaries.items():
+        if c in url or c in (q.get("sent") or ""):
+            canary_sent.append({"bait":path,"to":url})
+exfil = bool(canary_sent) or (bool(bait_read) and bool(ext_hosts or connects or requests))
 summary={
  "bait_files_read": bait_read,
  "contacted_hosts": ext_hosts,
  "connected_addresses": connects[:200],
+ "http_requests": requests[:300],
+ "bait_sent_out": canary_sent,
+ "tls_refused_by_client": sorted(set(tls_refused))[:50],
  "read_secret_then_contacted_external_host": exfil,
  "build_tail": build[-1500:],
  "opens_count": len(opens), "failed_opens_sample": sorted(fails)[:10],

@@ -19,13 +19,14 @@
 # Screenshots and the video are published with the report; take a shot at
 # every step that shows something, named for what it shows.
 set -uo pipefail
-S=/run/desk; M=/run/media; U=/root/.local/share/Logos/LogosBasecamp
+S=/run/desk; M=/run/media; U=$HOME/.local/share/Logos/LogosBasecamp
 mkdir -p "$S" "$M"
 export DISPLAY=:99 QT_QPA_PLATFORM=xcb WAYLAND_DISPLAY= QT_FORCE_STDERR_LOGGING=1
 res=$(jq -r '.resolution // .res // empty' /run/behaviour/disguise.json 2>/dev/null); res=${res:-1920x1200}
 W=${res%x*}; H=${res#*x}
 
 bc_up() {
+  # In a review, root has unpacked Basecamp already, where the user can't change it.
   [ -d /opt/bc/squashfs-root ] || { mkdir -p /opt/bc && cd /opt/bc && /opt/basecamp/Basecamp.AppImage --appimage-extract >/dev/null 2>&1; cd - >/dev/null; }
   mkdir -p "$U/modules" "$U/plugins"
   ( cd /root && exec /opt/bc/squashfs-root/AppRun --user-dir "$U" >>"$M/basecamp.log" 2>&1 ) &
@@ -100,14 +101,18 @@ ocr() {  # one line per text line on screen: "x,y  text" (x,y = its centre)
 case "${1:-}" in
   time) clock ;;
   start)
-    Xvfb :99 -screen 0 "${res}x24" -nolisten tcp >/dev/null 2>&1 & echo $! > "$S/xvfb.pid"; sleep 2
-    # The recorder runs under its own name: a reviewer clearing stuck
-    # processes with "pkill ffmpeg" ended run 3's video.
-    cp -f "$(command -v ffmpeg)" "$S/desk-recorder"
-    "$S/desk-recorder" -nostdin -loglevel error -f x11grab -framerate 4 -video_size "${W}x${H}" -i :99 \
-      -c:v libx264 -preset veryfast -crf 32 -pix_fmt yuv420p -movflags +faststart "$M/session.mp4" \
-      >/dev/null 2>"$S/ffmpeg.err" & echo $! > "$S/ffmpeg.pid"
-    bc_up; echo "desk: ${res} screen, Basecamp up, recording to media/session.mp4"; ocr | head -40 ;;
+    # In a review the screen and its recorder are root's and already running;
+    # alone (a test), desk brings its own.
+    if ! xdpyinfo -display :99 >/dev/null 2>&1; then
+      Xvfb :99 -screen 0 "${res}x24" -nolisten tcp >/dev/null 2>&1 & echo $! > "$S/xvfb.pid"; sleep 2
+      # Under its own name: a reviewer clearing stuck processes with
+      # "pkill ffmpeg" ended run 3's video.
+      cp -f "$(command -v ffmpeg)" "$S/desk-recorder"
+      "$S/desk-recorder" -nostdin -loglevel error -f x11grab -framerate 4 -video_size "${W}x${H}" -i :99 \
+        -c:v libx264 -preset veryfast -crf 32 -pix_fmt yuv420p -movflags +faststart "$M/session.mp4" \
+        >/dev/null 2>"$S/ffmpeg.err" & echo $! > "$S/ffmpeg.pid"
+    fi
+    bc_up; echo "desk: ${res} screen, Basecamp up, the session is being recorded"; ocr | head -40 ;;
   install)
     lgx=${2:?desk install <file.lgx>}
     bc_down

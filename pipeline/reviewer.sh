@@ -33,7 +33,7 @@ NAME=review-$slug-$$
 ( exec >/dev/null 2>&1 </dev/null
   sleep $(( (${REVIEW_MAX_MIN:-150}+40)*60 )) & s=$!; trap 'kill $s; exit' TERM
   wait $s; podman kill "$NAME" ) & BACKSTOP=$!
-podman run --rm --name "$NAME" --hostname dell-xps --cap-add SYS_ADMIN --network bridge \
+podman run --rm --name "$NAME" --hostname dell-xps --cap-add SYS_ADMIN --cap-add NET_ADMIN --network bridge \
   -e GATEWAY_PORT="$PORT" -e GATEWAY_URL="http://host.containers.internal:$PORT" -e REVIEW_TOKEN="$TOKEN" -e REPORT_TOKEN="$REPORT" -e REVIEW_MAX_MIN="${REVIEW_MAX_MIN:-150}" -e REVIEW_MODEL="$REVIEW_MODEL" \
   -v "$RUN:/run:z" -v "$HERE:/pipeline:ro" "${BC_MNT[@]}" "$IMG" \
   bash /pipeline/review-in-sandbox.sh 2>&1 | tail -6

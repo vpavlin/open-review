@@ -35,7 +35,9 @@ if [[ "$REPO" != localdir:* ]] && ! url_ok "$REPO"; then echo "not a repository 
 [[ "$COMMIT" =~ ^([0-9a-f]{7,40}|HEAD)$ ]] || { echo "not a commit: $COMMIT"; exit 2; }
 if [ -n "$LGX" ] && ! url_ok "$LGX"; then echo "not a package URL: $LGX"; exit 2; fi
 slug=$(printf '%s-%s' "$(basename "$REPO" .git)" "${COMMIT:0:12}" | tr -c 'A-Za-z0-9._-' -)
-RUN=/home/reviewer/runs/$slug; rm -rf "$RUN"; mkdir -p "$RUN"/{src,checks,build,behaviour,media,logs}
+# What the sandbox's user wrote belongs to a sub-uid here: removed inside
+# podman's user namespace, as the agent's archive does (shrooms ADR-072).
+RUN=/home/reviewer/runs/$slug; podman unshare rm -rf "$RUN"; mkdir -p "$RUN"/{src,checks,build,behaviour,media,logs}
 DEST=/srv/reviews/$slug
 # A review of the same commit again: the last one stays published beside it,
 # named for when it ran. Overwriting in place left the earlier run's report

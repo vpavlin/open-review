@@ -26,10 +26,11 @@ for f in /.dockerenv /run/.containerenv; do
 done
 
 # A lived-in look for the user's home.
-h=/root
+h=${HOME_DIR:-/home/pavel}
 mkdir -p "$h/Documents" "$h/Downloads" "$h/.mozilla/firefox/ab12cd.default-release" "$h/.config"
 : > "$h/.bash_history"; printf '%s\n' "cd ~/Documents" "ls" "firefox" "code ." "git status" "sudo apt update" >> "$h/.bash_history"
 printf 'invoices-2026.ods\nnotes.md\ntax-return.pdf\n' > "$h/Documents/.listing" 2>/dev/null
+chown -R pavel:pavel "$h" 2>/dev/null
 did+=("home dressed")
 
 # DMI/vendor strings live in read-only sysfs; faking them needs a bind mount

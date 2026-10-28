@@ -4,7 +4,7 @@
 # finding: "it read your fake seed phrase and sent it to x.y.z". Nothing here
 # is real; the canaries are logged so the recorder can match them.
 set -uo pipefail
-h=${1:-/root}; OUT=${2:-/tmp/bait.json}
+h=${1:-/home/pavel}; OUT=${2:-/tmp/bait.json}
 canary() { echo "CANARY-$(head -c9 /dev/urandom | base64 | tr -dc a-zA-Z0-9 | head -c12)"; }
 declare -A B
 mkdir -p "$h/.ssh" "$h/.aws" "$h/.config/solana" "$h/.electrum"
@@ -22,5 +22,7 @@ printf 'seed phrase: witch collapse practice feed shame %s open despair creek ro
 c=$(canary); B["$h/.electrum/wallet"]=$c
 printf 'xprv-fake-%s\n' "$c" > "$h/.electrum/wallet"
 
+# The user's, as on a laptop: the module runs as that user and can read them.
+chown -R pavel:pavel "$h/.ssh" "$h/.aws" "$h/.config" "$h/.electrum" 2>/dev/null
 { echo "{"; first=1; for p in "${!B[@]}"; do [ $first = 1 ] || echo ","; first=0; printf '  "%s": "%s"' "$p" "${B[$p]}"; done; echo; echo "}"; } > "$OUT"
 echo "bait: planted ${#B[@]} (canaries in $OUT)"
