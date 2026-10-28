@@ -1,6 +1,6 @@
 # Open review: automatic audits of Basecamp modules
 
-Updated 2026-10-28 · laptop/shrooms for Václav
+Updated 2026-10-28 (evening) · laptop/shrooms for Václav
 
 **Code:** [github.com/vpavlin/open-review](https://github.com/vpavlin/open-review) (public). **Status: working proof of concept** — the full pipeline runs end to end on a dedicated VM. See `NOTES.md` (running log) and `BACKLOG.md` in the repo.
 
@@ -26,9 +26,10 @@ Every submission is tested properly: built, installed, clicked through, attacked
 ## How a review runs
 
 1. **Submit.** A repository URL and commit, plus the module's `.lgx` if one is published.
-    - **PoC:** a task you send from the Shrooms Agents app to the reviewer session, marked fresh.
-    - **Later:** a Basecamp app, with submissions signed by the submitter's key and sent over Logos Messaging, or a WhisperBox form.
-2. **Queue.** One review at a time per reviewer.
+    - **Shrooms Agents:** a message to the `open-review` intake session, from the app or any agent on the review mesh. It replies with the queue position and the live link.
+    - **WhisperBox:** a form whose co-owner is a headless WhisperBox node on the review host. Answers signed with WhisperBox 0.5.0 carry the submitter's identity; the submitter gets a receipt and private replies (queued, started, the report link).
+    - **Later:** votes on what to review next, as public signed votes (a LEZ program weighted by LNS holdings), not in a form.
+2. **Queue.** One review at a time, and only when the day's model budget covers a whole review: otherwise it waits for the refill and says so.
 3. **Fresh sandbox.** It's dressed as a laptop (see below), with no credentials. Its network allows only the model gateway, package mirrors and whatever the module itself contacts, and all of that is recorded.
 4. **Review.** The base review below, within a token and time budget.
 5. **Report.** The agent writes it to its outbox, the only way out of the sandbox.
@@ -105,7 +106,7 @@ Two more tricks against code that waits:
 
 ## What gets published
 
-Each review is a public folder on the review VM, `http://REVIEW-HOST/<module>-<commit>/` for the PoC (the review node never writes to anyone else's storage), later Logos Storage too. All public, since only open source is accepted. A re-review of the same commit keeps the earlier one beside it.
+Each review is a public folder on the review VM, `http://REVIEW-HOST/<module>-<commit>/` (the review node never writes to anyone else's storage), listed on the front page. The same folder is uploaded to **Logos Storage** as one archive, and its CID is on the page: any node on the logos.test network can fetch it while one holds it (ours does; nothing pays for durability yet). All public, since only open source is accepted. A re-review of the same commit keeps the earlier one beside it.
 
 | File | What it is |
 | --- | --- |
@@ -117,7 +118,7 @@ Each review is a public folder on the review VM, `http://REVIEW-HOST/<module>-<c
 | `gateway.jsonl` | every model request and reply, with token counts |
 | `meta.json` | repository, commit, artifact hashes, laptop profile used, model, prompt and image versions |
 
-**Trust in the PoC:** the logs are hash-chained and signed with a key the review host holds, so any edit after publishing shows. The inputs are pinned, so anyone can re-run a review and compare.
+**Trust in the PoC:** the files of a review are hash-chained (`chain.txt`) and the archive is content-addressed on Logos Storage, so an edit after publishing shows against the CID. The chain isn't signed yet. The inputs are pinned (commit, package and dependency hashes, model, sandbox image, pipeline commit), so a review can be re-run and compared.
 
 **After the PoC:**
 
@@ -129,7 +130,7 @@ Each review is a public folder on the review VM, `http://REVIEW-HOST/<module>-<c
 
 ## Who may submit, and cost
 
-1. **PoC:** you only.
+1. **PoC:** you, and whoever has the WhisperBox form's link (three waiting reviews per signed submitter, three in all for unsigned answers).
 2. **Authenticated:** a list of keys, with Lambda entrants added when they enter.
 3. **Permissionless:** anyone, with a rate limit per key and per repository, a queue and a cost cap.
 
@@ -167,15 +168,16 @@ and an Evaluated Releases catalog need.
 
 ## Status
 
-**PoC, on a dedicated VM (Contabo VPS 6), administered only over a private mesh, its reviews public over HTTP — done:**
+**PoC, on a dedicated VM (Contabo VPS 6), administered only over a private mesh, its reviews public over HTTP — working:**
 
-- [x] The VM, rebuildable from `host/00-base.sh` → `10-shrooms.sh` → `20-web.sh` → `30-agent.sh`.
-- [x] The laptop disguise: three profiles (XPS 13, ThinkPad X1, Framework 13), picked at random per run.
-- [x] The recording: strace (reads, incl. refused; writes; connects; execs), a logging DNS/connection sink, bait.
-- [x] The reviewer agent (pi, Venice DeepSeek uncensored), auditor's method, fresh per task; the model key held off the sandbox in a logging gateway.
-- [x] The publishing pipeline: hash-chained logs, an escaped read-only report, and a live view.
-- [x] Graded on a known-bad (critical) and a known-good (clean) control.
+- [x] **The VM, rebuilt from the repository** by `host/00`…`50` (`host/README.md`), pinned throughout, and proven on a fresh local VM with a stand-in for the model.
+- [x] **The sandbox:** dressed as one of three laptops; the reviewer and the module as two ordinary users (the module can't touch the report or the record); root keeps the instruments; a self-check of 31 points, failing closed.
+- [x] **The record:** strace, a logging DNS resolver, a recording HTTPS proxy per user (what was sent where, bait canaries included), bait.
+- [x] **The reviewer:** pi on Venice DeepSeek V4.1 Flash, the auditor's method, a clock and a **1 DIEM budget** per review, enforced at the gateway; the key never in the sandbox.
+- [x] **Publishing:** a front page of every review; a report page with the verdict, findings, screenshots, video, behaviour, usage and the real cost; a hash chain; a copy on Logos Storage.
+- [x] **Intake:** the queue, Shrooms Agents and WhisperBox.
+- [x] **Graded:** the known-bad control as critical (with its exfiltration recorded), the clean one as clean, open-review itself (16 findings, all of substance fixed), and forumer (LP-0026): 12 to 19 findings a run.
 
-**Next (see `BACKLOG.md`):** software GL so Basecamp renders pure-QML modules in the sandbox; build-and-compare the `.lgx`; `lgx verify` + rootHash/signature as a first-class signal; harden the report stage.
+**Next (see `BACKLOG.md`):** build-and-compare the `.lgx`; `lgx verify` + rootHash as the report's headline; sign the hash chain; throwaway model keys.
 
 **Lambda prize:** an open review service for Logos ecosystem software, with this PoC as the reference.
