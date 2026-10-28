@@ -139,11 +139,32 @@ if rep and rep.get("findings"):
 findings=(f"<table><tr><th>id</th><th>severity</th><th>finding</th><th>confirmed</th><th>where</th></tr>{fr}</table>"
           "<p>Full exploit and fix per finding in <a href='report.md'>report.md</a>.</p>") if fr else "<p>See <a href='report.md'>report.md</a>.</p>"
 U=usage_stats(run)
+def charged():
+    """What Venice actually took: the account's balance before the review
+    minus after it. Whole account, so other use in the same window counts."""
+    try:
+        a=json.load(open(os.path.join(run,"logs","balance-start.json")))
+        b=json.load(open(os.path.join(run,"logs","balance-end.json")))
+    except Exception:
+        return "not recorded for this run"
+    if "error" in a or "error" in b: return "not recorded: "+esc(a.get("error") or b.get("error"))
+    ne=a.get("next_epoch") or ""
+    try:
+        from datetime import datetime
+        if ne and datetime.fromisoformat(ne.replace("Z","+00:00")).timestamp() <= b["t"]:
+            return "not measurable: the daily DIEM allowance refilled during the run"
+    except Exception: pass
+    parts=[]
+    for cur in ("DIEM","USD"):
+        d=(a["balances"].get(cur) or 0)-(b["balances"].get(cur) or 0)
+        if abs(d)>=0.00005: parts.append(f"{d:.4f} {cur}")
+    return (" + ".join(parts) or "0") + " <span style='color:#888'>(the Venice account's balance before minus after; any other use of the account in that time counts too)</span>"
 usage=(f"<table><tr><th>model calls</th><td>{U['model_calls']}</td></tr>"
        f"<tr><th>input tokens</th><td>{U['input_tokens']:,} ({U['cached_input_tokens']:,} cached)</td></tr>"
        f"<tr><th>output tokens</th><td>{U['output_tokens']:,}</td></tr>"
        f"<tr><th>model time</th><td>{U['model_seconds']} s</td></tr>"
-       f"<tr><th>estimated cost</th><td>${U['est_cost_usd']}</td></tr>"
+       f"<tr><th>charged by Venice</th><td>{charged()}</td></tr>"
+       f"<tr><th>computed</th><td>${U['est_cost_usd']} <span style='color:#888'>(this review's tokens × Venice's list price for {esc(MODEL)})</span></td></tr>"
        f"<tr><th>provider errors</th><td>{U['provider_errors']} (retries {U['retries']})</td></tr></table>")
 if not U["recorded"]:
     usage=(f"<p>{U['model_calls']} model calls, {U['model_seconds']} s of model time. Token counts were not "

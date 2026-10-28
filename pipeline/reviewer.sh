@@ -17,6 +17,7 @@ mkdir -p "$RUN/logs"; echo "venice/$REVIEW_MODEL" > "$RUN/logs/model"
 PORT=$(python3 -c "import socket;s=socket.socket();s.bind(('0.0.0.0',0));print(s.getsockname()[1]);s.close()")
 TOKEN=$(python3 -c "import secrets;print(secrets.token_hex(16))")
 export GATEWAY_PORT=$PORT REVIEW_TOKEN=$TOKEN
+python3 "$HERE/balance.py" "$RUN/logs/balance-start.json"
 python3 "$HERE/gateway.py" & GW=$!
 for i in $(seq 1 30); do curl -s -m1 -o /dev/null "http://127.0.0.1:$PORT/" && break; kill -0 $GW 2>/dev/null || { echo "gateway died"; exit 1; }; sleep 0.5; done
 ( while kill -0 $GW 2>/dev/null; do "$HERE/render.py" "$RUN" "$DEST" "$slug" live >/dev/null 2>&1; sleep 3; done ) & LV=$!
@@ -26,4 +27,6 @@ timeout 2400 podman run --rm --hostname dell-xps --cap-add SYS_ADMIN --network b
   -v "$RUN:/run:z" -v "$HERE:/pipeline:ro" "${BC_MNT[@]}" "$IMG" \
   bash /pipeline/review-in-sandbox.sh 2>&1 | tail -6
 kill $GW $LV 2>/dev/null; sleep 1
+# Venice settles a streamed reply after it ends; give the last one a moment.
+sleep 20; python3 "$HERE/balance.py" "$RUN/logs/balance-end.json"
 [ -f "$RUN/report.md" ] && echo "report written ($(wc -l < "$RUN/report.md") lines)" || echo "no report.md produced"
