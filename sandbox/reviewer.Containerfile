@@ -30,8 +30,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         strace ltrace \
     && rm -rf /var/lib/apt/lists/*
 
-# pi, pinned as the shrooms cage pins it (MCP built in from 1.x; "$VAR" apiKey).
-RUN npm install -g @earendil-works/pi-coding-agent@1.4.0 && npm cache clean --force
+# pi 1.4.0 and the exact tree of its dependencies (pi-shrinkwrap.json, taken
+# from the image that worked): pinning pi alone left npm to resolve the rest
+# anew, and on 2026-10-28 a fresh build failed on @aws-sdk/core@^3.978.7,
+# published minutes before. Its tarball is checked against the registry's
+# sha512.
+COPY pi-shrinkwrap.json /tmp/pi-shrinkwrap.json
+RUN set -eux; cd /opt; \
+    npm pack -q @earendil-works/pi-coding-agent@1.4.0 >/dev/null; \
+    test "sha512-$(openssl dgst -sha512 -binary earendil-works-pi-coding-agent-1.4.0.tgz | base64 -w0)" = \
+         "sha512-Z41LpZ3yYHSC/UUps6Mr39UMFPwH8elhJBG9DY1P7kuzsE5qSK/6eMj2EHzO5evJRQWLbKSqUMw+4nCNtIyiQg=="; \
+    tar xzf earendil-works-pi-coding-agent-1.4.0.tgz && mv package pi && rm earendil-works-pi-coding-agent-1.4.0.tgz; \
+    cd pi && jq 'del(.devDependencies)' package.json > p.json && mv p.json package.json; \
+    cp /tmp/pi-shrinkwrap.json npm-shrinkwrap.json && npm ci --omit=dev --no-audit --no-fund; \
+    chmod +x dist/bundle/cli.js && ln -sf /opt/pi/dist/bundle/cli.js /usr/local/bin/pi; \
+    npm cache clean --force; pi --version
 
 # Run and record a GUI (Basecamp is Qt): an X server to drive, ffmpeg and
 # ImageMagick to record, and the libraries Qt apps load. AppImages self-extract
