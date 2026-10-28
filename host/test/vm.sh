@@ -14,7 +14,7 @@ D=${OR_VM_DIR:-$HOME/or-vm}; mkdir -p "$D"
 IMG_URL=https://cloud-images.ubuntu.com/releases/noble/release/ubuntu-24.04-server-cloudimg-amd64.img
 REF=${OR_REF:-main}
 KEY=$D/id_ed25519
-SSH=(ssh -i "$KEY" -p 2290 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR op@127.0.0.1)
+SSH=(ssh -i "$KEY" -p 2290 -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR op@127.0.0.1)
 
 up() {
   [ -f "$KEY" ] || ssh-keygen -q -t ed25519 -N '' -f "$KEY"
@@ -36,7 +36,7 @@ EOF
   printf 'instance-id: or-vm\nlocal-hostname: openreview\n' > "$D/meta-data"
   cloud-localds "$D/seed.img" "$D/user-data" "$D/meta-data" 2>/dev/null \
     || genisoimage -quiet -output "$D/seed.img" -volid cidata -joliet -rock "$D/user-data" "$D/meta-data"
-  qemu-system-x86_64 -enable-kvm -cpu host -smp 6 -m 8192 -nographic \
+  qemu-system-x86_64 -enable-kvm -cpu host -smp 6 -m 8192 \
     -drive file="$D/disk.qcow2",if=virtio -drive file="$D/seed.img",if=virtio,format=raw \
     -netdev user,id=n0,hostfwd=tcp:127.0.0.1:2290-:22,hostfwd=tcp:127.0.0.1:8090-:80 -device virtio-net,netdev=n0 \
     -daemonize -pidfile "$D/qemu.pid" -serial file:"$D/console.log" -display none
