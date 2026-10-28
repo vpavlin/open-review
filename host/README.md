@@ -26,7 +26,10 @@ the leaky control with a stand-in for the model (no key, no budget). On
 2026-10-28 it passed from a clean VM: 31 of 31 self-checks, the reviewer
 and the record out of the module's reach, the module's exfiltration
 recorded, the report published. Getting there found five faults a rebuild
-would have hit, all fixed.
+would have hit, all fixed. Again in the evening, at 6d6bc9c, with 50 and a
+review of a module with its package (forumer 0.2.5): passed, after two more
+faults found and fixed (pi's dependency tree wasn't pinned; the package's
+file name lost its .lgx).
 
 **Pinned:** shrooms' installers by commit and its images by digest; pi,
 Node, semgrep, mitmproxy, gitleaks and osv-scanner by version; the sandbox's

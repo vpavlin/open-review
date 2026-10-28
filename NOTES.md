@@ -263,3 +263,13 @@ A running log: newest last. What was done, why, and what was found.
   WhisperBox form and adding the bot as co-owner (host/whisperbox-bot.md);
   whether to release WhisperBox 0.5.0. Forumer 0.2.5 is queued and runs
   after the 00:00 UTC refill.
+- **Evening:** reports name the package they evaluated (name, version,
+  rootHash, sha256, signed or not, the official catalogue's view; found the
+  WhisperBox drop's delivery_module 0.3.0 is a rebuild, not the official
+  0.3.0) and the open-review commit; the package and its dependencies are
+  installed before the reviewer starts, untraced (about 5 minutes saved);
+  20-web.sh takes a domain for HTTPS (or.vpavlin.xyz, waiting on DNS); an
+  OpenRouter free-model trial is wired (waiting on the key). The VM caught
+  two more faults: pi's dependencies weren't pinned (a shrinkwrap from the
+  working image now), and the package's file name became ".lgx_". Clean
+  from-scratch pass at 6d6bc9c, which the review host runs.
