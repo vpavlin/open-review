@@ -328,6 +328,14 @@ def block(title,body,cls=""):
     return f"<section class='{cls}'><h2>{title}</h2>{body}</section>" if body.strip() else ""
 behaviour=(f"<ul class='beh'>{behrow}</ul>" if behrow else
            ("<p>Nothing recorded before it stopped.</p>" if FAILED else "<p class='ok'>Nothing flagged: no bait read or sent, no unexpected traffic.</p>"))
+def storage_section():
+    """The Logos Storage copy, once storage.py has made it; until then a
+    placeholder it fills in (the page isn't rendered twice for it)."""
+    try:
+        import storage
+        return storage.storage_html(json.load(open(os.path.join(dest,"storage.json"))))
+    except Exception:
+        return "<!--storage-->"
 PAGE_CSS="""
 :root{--bg:#0b0d10;--panel:#14181d;--line:#232a32;--fg:#d9dee4;--dim:#8b95a1;--acc:#6cc8ff;
 --critical:#ff4d5e;--high:#ff8a3d;--medium:#f5c542;--low:#7bc8a4;--info:#8b95a1;--none:#5fd38d;--failed:#ff4d5e}
@@ -390,6 +398,7 @@ write("index.html", f"""<!doctype html><meta charset=utf-8><meta name=viewport c
 {block('Suggested order', mdsafe.render(section('Suggested order'),shift=1))}
 {block('What the reviewer ran', mdsafe.render(section('What I ran'),shift=1) or ('<ul>'+ran+'</ul>' if ran else ''))}
 {block('Usage and cost', usage)}
+{storage_section()}
 <section><h2>Evidence</h2><ul>
 <li><a href="report.md">report.md</a>: the reviewer's full writeup · <a href="report.json">report.json</a></li>
 <li><a href="session.log">session.log</a>: the reviewer's session · <a href="gateway.jsonl">gateway.jsonl</a>: every model request and reply</li>
@@ -401,5 +410,8 @@ Sandbox image <code>{esc(imgid or 'not recorded')}</code>{' · package sha256 <c
 # For the list of reviews.
 json.dump({"slug":slug,"title":title,"repo":repo,"commit":commit,"when":when,"verdict":worst,"pill":pill,
            "counts":counts,"cost":cost,"summary":(rep or {}).get("verdict_summary","") if isinstance((rep or {}).get("verdict_summary",""),str) else "",
-           "failed":bool(FAILED),"lgx":lgxsum.split()[0] if lgxsum else ""},open(os.path.join(dest,"review.json"),"w"))
+           "failed":bool(FAILED),"lgx":lgxsum.split()[0] if lgxsum else "",
+           # A re-render keeps the Logos Storage copy storage.py made.
+           "storage":(json.load(open(os.path.join(dest,"storage.json"))) if os.path.isfile(os.path.join(dest,"storage.json")) else None)},
+          open(os.path.join(dest,"review.json"),"w"))
 print("published:",dest)

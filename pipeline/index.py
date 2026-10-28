@@ -47,7 +47,9 @@ for base, rs in sorted(latest.items(), key=lambda kv: kv[1][-1].get("when", ""),
         f"<a class=row href='{esc(r['dir'])}/'><div class=top><span class='verdict v-{esc(r.get('verdict','info'))}'>{esc(r.get('pill',''))}</span>"
         f"<b>{esc(r.get('title', base))}</b><span class=when>{esc(r.get('when',''))}</span></div>"
         f"<div class=sub><code>{esc(r.get('repo',''))}</code>{' @ <code>'+esc(str(r.get('commit',''))[:12])+'</code>' if r.get('commit') else ''}"
-        f"{' · '+esc(r['cost']) if r.get('cost') else ''}</div><div class=chips>{chips}</div><p>{esc(summ)}</p></a>"
+        f"{' · '+esc(r['cost']) if r.get('cost') else ''}"
+        f"{' · Logos Storage <code>'+esc(r['storage']['cid'][:14])+'…</code>' if isinstance(r.get('storage'),dict) and r['storage'].get('cid') else ''}"
+        f"</div><div class=chips>{chips}</div><p>{esc(summ)}</p></a>"
         + (f"<div class=earlier>earlier: " + " · ".join(f"<a href='{esc(x['dir'])}/'>{esc(x.get('when',''))} ({esc(x.get('pill',''))})</a>" for x in reversed(earlier)) + "</div>" if earlier else ""))
 CSS = """
 :root{--bg:#0b0d10;--panel:#14181d;--line:#232a32;--fg:#d9dee4;--dim:#8b95a1;--acc:#6cc8ff;
