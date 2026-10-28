@@ -52,7 +52,7 @@ EOF
 setup() {
   "${SSH[@]}" "set -e; sudo apt-get -qq update; sudo apt-get -qq -y install git >/dev/null
     rm -rf open-review && git clone -q https://github.com/vpavlin/open-review && cd open-review && git checkout -q $REF
-    cd host && for s in 00-base.sh 10-shrooms.sh 20-web.sh 30-agent.sh 40-pipeline.sh; do
+    cd host && for s in 00-base.sh 10-shrooms.sh 20-web.sh 30-agent.sh 40-pipeline.sh 50-storage.sh; do
       echo \"=== \$s\"; sudo bash \$s 2>&1 | tail -25; done"
 }
 
@@ -71,6 +71,7 @@ verify() {
     echo "--- what the record shows"; sudo jq -c "{bait_sent_out,http_requests,reviewer_requests}" $R/behaviour/summary.json
     echo "--- published: $(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1/leaky-build-HEAD/) report, $(ls /srv/reviews/leaky-build-HEAD/media/ 2>/dev/null | tr "\n" " ")"
     echo "--- the pipeline commit recorded: $(sudo cat $R/logs/pipeline-commit)"
+    echo "--- on Logos Storage: $(sudo jq -r ".cid // \"no\"" /srv/reviews/leaky-build-HEAD/storage.json 2>/dev/null)"
     echo "--- services: queue $(sudo -iu reviewer env XDG_RUNTIME_DIR=/run/user/$(id -u reviewer) systemctl --user is-active open-review-queue), agent $(sudo -iu reviewer env XDG_RUNTIME_DIR=/run/user/$(id -u reviewer) systemctl --user is-active shrooms-agent)"'
 }
 

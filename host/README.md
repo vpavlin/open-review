@@ -12,6 +12,7 @@ clone of this repository:
     bash 40-pipeline.sh    # the pipeline, Basecamp 0.3.2 by hash, the pinned sandbox
                            # image, the queue, the intake session
     bash 45-whisperbox.sh <bot build>   # optional: WhisperBox submissions
+    bash 50-storage.sh [public IP]      # optional: reviews mirrored to Logos Storage
 
 40 ends with what is left by hand: the model key, typed on the host, and
 joining the mesh with an invite from its admin.
