@@ -1,0 +1,20 @@
+[Unit]
+Description=open-review: headless WhisperBox node, co-owner of the submission form
+After=network-online.target
+
+[Service]
+# Everything the node keeps is under ~/wb-bot/state (atlas/whisperbox's recipe):
+# without WHISPERBOX_CORE_DATA the core would use the account's real home.
+Environment=HOME=%h/wb-bot/state/home
+Environment=WHISPERBOX_CORE_DATA=%h/wb-bot/state/home/.whisperbox-core
+Environment=LOGOSCTL_CONFIG_DIR=%h/wb-bot/state/cfg
+Environment=QT_QPA_PLATFORM=offscreen
+ExecStartPre=/usr/bin/mkdir -p %h/wb-bot/state/home/.whisperbox-core
+ExecStart=/usr/local/bin/logosctl daemon start
+# Installing what is already installed is a no-op; then load the core.
+ExecStartPost=/bin/bash -c 'sleep 5; for f in %h/wb-bot/dist/*.lgx; do /usr/local/bin/logosctl install "$f" -y; done; /usr/local/bin/logosctl module load whisperbox_core'
+Restart=always
+RestartSec=20
+
+[Install]
+WantedBy=default.target

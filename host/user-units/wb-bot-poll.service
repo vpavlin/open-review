@@ -1,0 +1,14 @@
+[Unit]
+Description=open-review: queue the submissions that come in through WhisperBox
+After=wb-bot.service
+Requires=wb-bot.service
+
+[Service]
+ExecStart=/usr/bin/python3 %h/pipeline/whisperbox.py poll
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+Environment=REVIEW_BASE=http://77.237.236.27
+Restart=always
+RestartSec=60
+
+[Install]
+WantedBy=default.target
