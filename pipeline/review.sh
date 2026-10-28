@@ -61,11 +61,13 @@ fi
 echo "$REPO" > "$RUN/logs/repo"
 
 # The published package, if there is one: the reviewer installs this into
-# Basecamp, so what is tested is what users install.
+# Basecamp, so what is tested is what users install. (Its name is cleaned
+# without the newline basename adds: tr made it ".lgx_", and no package was
+# found; caught rebuilding the host on a VM, 2026-10-28.)
 if [ -n "$LGX" ]; then
   live "## fetch the published package"; log "lgx $LGX"
   mkdir -p "$RUN/lgx"
-  inbox bridge 'f=$(basename -- "$LGX" | tr -c "A-Za-z0-9._-" _); curl -sSfL --max-time 300 -o "lgx/$f" -- "$LGX" && sha256sum lgx/*.lgx > logs/lgx.sha256' \
+  inbox bridge 'f=$(printf %s "${LGX##*/}" | tr -c "A-Za-z0-9._-" _); curl -sSfL --max-time 300 -o "lgx/$f" -- "$LGX" && sha256sum lgx/*.lgx > logs/lgx.sha256' \
     || live "  could not download $LGX"
   [ -s "$RUN/logs/lgx.sha256" ] && live "  $(cat "$RUN/logs/lgx.sha256")"
   # What it needs, from the official catalogue, fetched here so the sandbox's
