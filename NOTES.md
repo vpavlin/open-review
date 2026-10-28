@@ -213,3 +213,31 @@ A running log: newest last. What was done, why, and what was found.
 - Gotchas: my own `pkill -f` and `pgrep -f` matched the shells running them
   (twice); a backstop sleep held review.sh's pipe open; a `grep -c` with no
   match ended an `&&` chain before an edit, which looked applied.
+
+## 2026-10-28 afternoon: a queue, two ways in, a host rebuilt from the repo
+
+- **The reviewer and the module are different users** (4870f58): pi as
+  `ondra`, the module and anything untrusted as `pavel` through `as-module`,
+  a broker root runs (sudo does nothing under strace: a traced process gets
+  no setuid). 31 self-checks. Real run on the leaky control: Critical, the
+  exfiltration recorded as the module's, nothing of the reviewer's mixed in.
+- **Front page and report template** (2615c26): every review listed with its
+  verdict, counts and cost; the report as cards, gallery, behaviour panel;
+  report.md through a small escaping Markdown renderer.
+- **The queue** (62c08d1): `queue.py` takes submissions, a user service runs
+  them one at a time and waits for the DIEM refill when a review wouldn't
+  fit. **Shrooms Agents intake:** `openreview/open-review` (pi, the 1017
+  model) queues requests sent over A2A. Forumer 0.2.5 queued that way,
+  waiting for 00:00 UTC.
+- **The review host shares no mesh with anything:** its `review` mesh
+  (fddd:2d8f:96a1) and the laptop's (fd4a:73a4:2be7) are two meshes with
+  one name, each with no peers. A2A to it needs Václav to join them.
+- **WhisperBox intake** (9bfc5f1): atlas/whisperbox's design and a 0.5.0
+  test build; a headless whisperbox_core under logosctl on the review host,
+  co-owner of a form that Václav still has to create. Votes: not in
+  WhisperBox (a tally sealed to the owner can't be checked); a LEZ program.
+- **Rebuildable host** (5ad4f3e): host/40-pipeline.sh, 45-whisperbox.sh;
+  shrooms installers by commit and images by digest; the sandbox image
+  pinned (base digest, Ubuntu archive snapshot, versions); Basecamp fetched
+  by URL and hash. host/test/vm.sh proves it on a fresh local VM with a
+  stand-in for the model.
