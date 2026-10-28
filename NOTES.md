@@ -156,3 +156,29 @@ A running log: newest last. What was done, why, and what was found.
   report. A re-run now moves the last one aside (7fc6f01).
 - **Run 3** started 17:48 UTC with the v0.2.5 `.lgx`, its dependencies,
   desk, and the 1017 model.
+
+## 2026-10-28: forumer run 4, the first auditor-grade report
+
+- Run 3 ended when the reviewer's `pkill -9 -f 'desk read'` matched pi
+  (whose argv was the whole prompt); `pkill ffmpeg` had ended the video.
+  Fixed: a one-line pi argument, OCR at 2x on one thread (3 s, not
+  minutes), the recorder renamed, kill-by-PID in the prompt (374a09e).
+- Run 4 (19:33 UTC, deepseek-v4-1-flash-1017, the v0.2.5 `.lgx`): 33
+  screenshots through identity, recovery phrase, private forums, posting,
+  settings, alias attacks, backup/restore, wrong password and images; a
+  38 MB recording; 8 probes; 163/163 core tests under ASan/UBSan.
+- It hit the 150-minute cap with **no report written**, and then hung all
+  night: `strace -f` waits for Basecamp/Xvfb/the recorder that pi started.
+  Fixed: wait on pi's `timeout`, then end what's left; and a reviewer that
+  stops without a report is resumed once to write it up (0a6daa6). For run 4
+  I resumed it by hand: a 239-line report.
+- **The report:** all six sections, 19 findings (1 High, 4 Medium, 14
+  Low), 22 `[run]` and 11 `[read]` tags. Top: signed posts can fill peers'
+  disks (preview blobs with no budget or runtime pruning); private-forum
+  metadata (forum id, persona key, reply graph) stored in clear; unsigned
+  messages grow maps unbounded; holder hints make the node dial
+  attacker-chosen addresses incl. loopback/LAN. Run 1, for comparison: 6
+  findings in 57 lines.
+- **Usage:** 200 calls, 42.8 M input tokens (41.3 M cached), 105 k output,
+  33 min of model time, **$0.90**, 2 retries, 0 provider failures.
+- Published: /forumer-b9907523bffc/ (the earlier attempts beside it).
