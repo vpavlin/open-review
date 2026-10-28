@@ -14,6 +14,8 @@ export REVIEW_RUN=$RUN GATEWAY_BIND=0.0.0.0
 # from 17:38 UTC on 2026-10-27 while its siblings answered.
 export REVIEW_MODEL=${REVIEW_MODEL:-deepseek-v4-1-flash-1017}
 mkdir -p "$RUN/logs"; echo "venice/$REVIEW_MODEL" > "$RUN/logs/model"
+# Which sandbox image did the review: not pinned yet (FR-13), so at least named.
+podman image inspect --format '{{.Id}}' "$IMG" > "$RUN/logs/image" 2>/dev/null
 PORT=$(python3 -c "import socket;s=socket.socket();s.bind(('0.0.0.0',0));print(s.getsockname()[1]);s.close()")
 TOKEN=$(python3 -c "import secrets;print(secrets.token_hex(16))")
 REPORT=$(python3 -c "import secrets;print(secrets.token_hex(16))")

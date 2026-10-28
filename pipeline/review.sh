@@ -76,12 +76,22 @@ if [ -n "$LGX" ]; then
 fi
 
 live "## static checks (gitleaks, osv-scanner, semgrep)"; log "static"
-inbox bridge 'cd src
-  gitleaks detect --no-banner --report-format json --report-path /run/checks/gitleaks.json . >/dev/null 2>&1 || true
-  osv-scanner --format json --recursive . > /run/checks/osv.json 2>/dev/null || true
-  semgrep scan --quiet --json --config auto . > /run/checks/semgrep.json 2>/dev/null || true
+# The scanners run on a copy without the repository's own scanner settings,
+# and ignore its inline suppressions: a repository could otherwise switch
+# off the checks on itself (FR-7). A scanner that fails says so.
+inbox bridge 'cp -a src /tmp/scan && cd /tmp/scan
+  find . \( -name .gitleaks.toml -o -name .gitleaksignore -o -name .semgrepignore -o -name osv-scanner.toml \) -print -delete > /run/checks/ignored-repo-config.txt
+  gitleaks detect --no-banner --ignore-gitleaks-allow --report-format json --report-path /run/checks/gitleaks.json . >/dev/null 2>/run/checks/gitleaks.err; echo "gitleaks $?" >> /run/checks/exit-codes.txt
+  osv-scanner --format json --recursive . > /run/checks/osv.json 2>/run/checks/osv.err; echo "osv-scanner $?" >> /run/checks/exit-codes.txt
+  semgrep scan --quiet --json --disable-nosem --config auto . > /run/checks/semgrep.json 2>/run/checks/semgrep.err; echo "semgrep $?" >> /run/checks/exit-codes.txt
   true'
 for c in gitleaks osv semgrep; do [ -s "$RUN/checks/$c.json" ] && live "  $c: $(wc -c < "$RUN/checks/$c.json") bytes"; done
+# Exit codes that mean "it didn't run": gitleaks 1 and osv-scanner 1 mean
+# findings, semgrep's 1 too; anything else, or no output, is a failure.
+while read -r tool code; do
+  case "$tool:$code" in *:0|gitleaks:1|osv-scanner:1|semgrep:1) ;; *) live "  $tool FAILED (exit $code): $(head -c 200 "$RUN/checks/${tool%-scanner}.err" 2>/dev/null)";; esac
+done < "$RUN/checks/exit-codes.txt" 2>/dev/null
+[ -s "$RUN/checks/ignored-repo-config.txt" ] && live "  the repository's own scanner settings were set aside: $(tr '\n' ' ' < "$RUN/checks/ignored-repo-config.txt")"
 
 live "## review: build, run and attack it in the sandbox (this is the work)"; log "sandboxed review"
 "$HERE/reviewer.sh" "$RUN" 2>&1 | tail -6 | tee -a "$RUN/logs/pipeline.log"

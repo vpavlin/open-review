@@ -128,8 +128,13 @@ if mode=="live":
     sys.exit(0)
 
 # final: copy raw evidence (served as text/json, never html)
+# Only evidence of the kinds we produce is published, all of it served as
+# text, JSON or media: whatever else the module left in these folders stays
+# here (FR-16). Caddy types files by extension.
+PUBLISH=(".png",".mp4",".txt",".log",".json",".jsonl",".err",".out",".mitm")
 for sub in ("logs","checks","build","behaviour","media"):
     for rel in files_beneath(sub):
+        if not rel.lower().endswith(PUBLISH): continue
         to=os.path.join(dest,rel); os.makedirs(os.path.dirname(to),exist_ok=True)
         copy_beneath(rel,to)
 for f in ("report.md","live.txt","session.log","gateway.jsonl","report.json"):
@@ -267,7 +272,7 @@ write("index.html", f"""<!doctype html><meta charset=utf-8><meta name=viewport c
 <title>review: {esc(slug)}</title><style>{CSS}</style>
 <h1>Review: {esc(slug)}</h1>
 <p><b>Repository:</b> <code>{esc(repo)}</code> @ <code>{esc(commit)}</code><br>
-<b>When:</b> {esc(time.strftime('%Y-%m-%d %H:%M UTC',time.gmtime()))} · <b>Model:</b> {esc(MODEL)}<br>
+<b>When:</b> {esc(time.strftime('%Y-%m-%d %H:%M UTC',time.gmtime()))} · <b>Model:</b> {esc(MODEL)} · <b>Sandbox image:</b> <code>{esc(readf(os.path.join("logs","image")).strip()[:19] or "not recorded")}</code><br>
 <b>Sandbox:</b> container dressed as a laptop; the host kernel is not hidden.
 {('<br><b class=red>'+esc(readf(os.path.join('logs','timed-out.txt')))+'</b>') if exists_beneath(os.path.join('logs','timed-out.txt')) else ''}
 {('<br><b style="color:#fa0">'+esc(readf(os.path.join('logs','written-after.txt')))+'</b>') if exists_beneath(os.path.join('logs','written-after.txt')) else ''}

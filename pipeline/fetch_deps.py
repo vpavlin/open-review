@@ -29,7 +29,10 @@ def satisfies(v, spec):
     if op == "~":
         return a[:2] == b[:2] and a >= b
     if op == "^":
-        return a[:1] == b[:1] and a >= b
+        # npm's caret: ^1.2.3 <2.0.0, ^0.2.3 <0.3.0, ^0.0.3 only 0.0.3 (FR-11).
+        if b[0] > 0: return a[:1] == b[:1] and a >= b
+        if b[1] > 0: return a[:2] == b[:2] and a >= b
+        return a == b
     return a == b
 
 lgx, out, cache = sys.argv[1:4]

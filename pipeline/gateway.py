@@ -24,6 +24,9 @@ TEST_SHARE=float(os.environ.get("REVIEW_TEST_SHARE","0.8"))
 PRICES={"deepseek-v4-1-flash-uncensored":(0.33,0.00825,1.32),
         "deepseek-v4-1-flash-1017":(0.30,0.0075,1.20),"deepseek-v4-1-flash":(0.30,0.0075,1.20)}
 SPENT={"total":0.0,"last":0.0}; LOCK=threading.Lock()
+# A request is at most this big (a 300k-token conversation is ~1.5 MB), and
+# only a few are in flight at once: the sandbox holds the token (FR-12).
+MAX_BODY=32<<20; SLOTS=threading.BoundedSemaphore(4)
 def cost(model,u):
     pi,pc,po=PRICES.get((model or "").split("/")[-1],(0.33,0.00825,1.32))
     pin=u.get("prompt_tokens",0) or 0; cached=(u.get("prompt_tokens_details") or {}).get("cached_tokens",0) or 0
@@ -77,7 +80,14 @@ class H(http.server.BaseHTTPRequestHandler):
         elif not TOKEN or auth=='Bearer '+TOKEN: phase="testing"
         else:
             self.send_response(403); self.end_headers(); self.wfile.write(b'{"error":"forbidden"}'); return
-        body=self.rfile.read(int(self.headers.get('Content-Length',0)))
+        try: n=int(self.headers.get('Content-Length',0))
+        except ValueError: n=-1
+        if not 0<=n<=MAX_BODY or not SLOTS.acquire(timeout=600):
+            self.send_response(413 if n>MAX_BODY else 429); self.end_headers(); return
+        try: self.handle_one(phase,n)
+        finally: SLOTS.release()
+    def handle_one(self,phase,n):
+        body=self.rfile.read(n)
         try: req=json.loads(body)
         except Exception: req={}
         if (req.get("model") or "").split("/")[-1]!=MODEL or MODEL not in PRICES:
