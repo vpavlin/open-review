@@ -36,9 +36,14 @@ EOF
   printf 'instance-id: or-vm\nlocal-hostname: openreview\n' > "$D/meta-data"
   cloud-localds "$D/seed.img" "$D/user-data" "$D/meta-data" 2>/dev/null \
     || genisoimage -quiet -output "$D/seed.img" -volid cidata -joliet -rock "$D/user-data" "$D/meta-data"
+  # Not qemu's default 10.0.2.0/24: rootless podman's user-mode network uses
+  # it too, inside its namespace, and there the VM's own address was a
+  # neighbour, not the host: the sandbox couldn't reach the gateway, and its
+  # self-check refused the review (2026-10-28). A real host on 10.0.2.x would
+  # see the same.
   qemu-system-x86_64 -enable-kvm -cpu host -smp 6 -m 8192 \
     -drive file="$D/disk.qcow2",if=virtio -drive file="$D/seed.img",if=virtio,format=raw \
-    -netdev user,id=n0,hostfwd=tcp:127.0.0.1:2290-:22,hostfwd=tcp:127.0.0.1:8090-:80 -device virtio-net,netdev=n0 \
+    -netdev user,id=n0,net=10.0.9.0/24,hostfwd=tcp:127.0.0.1:2290-:22,hostfwd=tcp:127.0.0.1:8090-:80 -device virtio-net,netdev=n0 \
     -daemonize -pidfile "$D/qemu.pid" -serial file:"$D/console.log" -display none
   for _ in $(seq 1 90); do "${SSH[@]}" true 2>/dev/null && { echo "up: ssh -i $KEY -p 2290 op@127.0.0.1"; return; }; sleep 5; done
   echo "the VM didn't come up; see $D/console.log"; exit 1
