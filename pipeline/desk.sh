@@ -14,6 +14,7 @@
 #   desk shot <name>           screenshot to /run/media/NN-<name>.png
 #   desk log [n]               the last n lines of Basecamp's log (default 40)
 #   desk stop                  stop Basecamp and finalise the video
+#   desk time                  how much of the review's time is used and left
 #
 # Screenshots and the video are published with the report; take a shot at
 # every step that shows something, named for what it shows.
@@ -58,6 +59,15 @@ install_one() {  # unpack one .lgx the way lgpm does
   echo "desk: installed $name ($type) $(jq -r .version "$t/manifest.json"), sha256 $(sha256sum "$lgx" | cut -c1-16)…"
   rm -rf "$t"
 }
+clock() {  # time used and left, from the limit the sandbox set
+  read -r t0 max < /run/logs/clock 2>/dev/null || return 0
+  used=$(( ($(date +%s)-t0)/60 )); left=$(( max-used )); by=$(( max-40 ))
+  if [ "$used" -ge "$by" ]; then
+    echo "[clock] ${used} of ${max} min used, ${left} left: STOP TESTING and write the report now"
+  else
+    echo "[clock] ${used} of ${max} min used, ${left} left; start the report by minute ${by}"
+  fi
+}
 nextshot() { n=$(ls "$M"/*.png 2>/dev/null | wc -l); printf '%02d' $((n+1)); }
 ocr() {  # one line per text line on screen: "x,y  text" (x,y = its centre)
   f="$S/ocr.png"
@@ -75,7 +85,9 @@ ocr() {  # one line per text line on screen: "x,y  text" (x,y = its centre)
     } END {for(i=1;i<=n;i++){k=o[i]; printf "%d,%d\t%s\n", (l[k]+r[k])/4, (tp[k]+b[k])/4, t[k]}}'
 }
 
+[ "${1:-}" != time ] && clock
 case "${1:-}" in
+  time) clock ;;
   start)
     Xvfb :99 -screen 0 "${res}x24" -nolisten tcp >/dev/null 2>&1 & echo $! > "$S/xvfb.pid"; sleep 2
     # The recorder runs under its own name: a reviewer clearing stuck

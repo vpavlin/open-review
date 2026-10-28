@@ -34,6 +34,9 @@ cd /run/src 2>/dev/null || { echo '{"error":"no source"}' > "$B/summary.json"; k
 # A hard cap on the review's time (the proposal's promise); a run that hits
 # it is published with what it has and says so.
 MAX_MIN=${REVIEW_MAX_MIN:-150}
+# The reviewer's clock (desk time). Run 4 never knew it had a limit, tested
+# until it was cut off and wrote nothing.
+echo "$(date +%s) $MAX_MIN" > /run/logs/clock
 strace -f -qq -e trace=openat,open,connect,execve,unlinkat,unlink,rename -e signal=none -s 300 -o "$B/strace.log" \
   timeout --kill-after=60 "${MAX_MIN}m" pi --model "venice/${REVIEW_MODEL}" -p "Your instructions are in /pipeline/reviewer-prompt.md. Read all of it first, then do what it says." \
   > /run/logs/session.txt 2>&1 &

@@ -55,6 +55,14 @@ RUN PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin pipx install semgrep >/dev/n
 # before misbehaving still acts.
 RUN apt-get update && apt-get install -y --no-install-recommends faketime && rm -rf /var/lib/apt/lists/*
 
+# What Basecamp modules build against, so a review doesn't spend its time on
+# apt: forumer's fourth run installed Qt and libsodium itself, 11 minutes of a
+# 150-minute review.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        qt6-base-dev qt6-declarative-dev qt6-remoteobjects-dev \
+        libsodium-dev libsqlite3-dev nlohmann-json3-dev libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY disguise.sh bait.sh record.sh profiles.json /usr/local/sbin/
 RUN chmod +x /usr/local/sbin/disguise.sh /usr/local/sbin/bait.sh /usr/local/sbin/record.sh
 

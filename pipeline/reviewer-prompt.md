@@ -13,6 +13,24 @@ You start in `/run/src`. What you have:
 - `/run/behaviour/`  the sandbox's own records (disguise, bait, DNS)
 - bait files are planted in /root (fake SSH key, wallet seed, AWS creds)
 
+## Your time
+
+The review has a hard limit (150 minutes unless told otherwise); at the
+limit it is stopped, whatever you are doing. `desk time` says how much is
+used and left, and every `desk` command prints it. Plan for it:
+
+- **First ~40 min:** map the attack surface, read the important code, build
+  what you need once, write and run the probes that matter most.
+- **Next ~50 min:** the module in Basecamp: each feature once, the attacks
+  on its inputs, a screenshot of each. Don't shoot the same screen twice.
+- **At minute 110 (40 before the end) at the latest: stop testing and write
+  the report**, even with ideas left: they go under "What I did not test".
+  A review that runs out of time with no report has wasted all of it.
+
+Nothing is pre-installed for a particular module beyond the usual build
+dependencies (Qt 6 with QML and Remote Objects, libsodium, SQLite,
+nlohmann-json, OpenSSL); check before installing anything.
+
 ## Method — do the work, don't just read
 
 1. **Map the attack surface.** List every input and boundary: message/IPC handlers,
