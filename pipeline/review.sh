@@ -114,6 +114,18 @@ while read -r tool code; do
 done < "$RUN/checks/exit-codes.txt" 2>/dev/null
 [ -s "$RUN/checks/ignored-repo-config.txt" ] && live "  the repository's own scanner settings were set aside: $(tr '\n' ' ' < "$RUN/checks/ignored-repo-config.txt")"
 
+# Beside the review: the published packages rebuilt from this source with Nix,
+# in a container of its own (rebuild.sh says why), and compared.
+REBUILD=
+if ls "$RUN"/lgx/*.lgx >/dev/null 2>&1; then
+  mkdir -p "$RUN/rebuild"
+  live "## rebuild the published packages from source with Nix (beside the review)"; log "rebuild"
+  podman run --rm --name "rebuild-$slug-$$" --cap-add SYS_ADMIN --security-opt unmask=/proc/* --network bridge \
+    -v "$RUN/src:/src:ro" -v "$RUN/lgx:/lgx:ro" -v "$RUN/rebuild:/out" -v "$HERE:/pipeline:ro" "$IMG" \
+    bash /pipeline/rebuild.sh > "$RUN/logs/rebuild.txt" 2>&1 &
+  REBUILD=$!
+fi
+
 live "## review: build, run and attack it in the sandbox (this is the work)"; log "sandboxed review"
 "$HERE/reviewer.sh" "$RUN" 2>&1 | tail -6 | tee -a "$RUN/logs/pipeline.log"
 python3 - "$RUN/behaviour/summary.json" <<'PY2' | while read l; do live "  $l"; done
@@ -135,6 +147,11 @@ elif [ ! -s "$RUN/report.md" ]; then
   echo "The reviewer wrote no report (see session.log for how it ended)." > "$RUN/logs/failed.txt"
 fi
 [ -s "$RUN/logs/failed.txt" ] && { log "FAILED: $(head -1 "$RUN/logs/failed.txt")"; live "## REVIEW FAILED"; live "$(cat "$RUN/logs/failed.txt")"; }
+
+if [ -n "$REBUILD" ]; then
+  wait "$REBUILD"
+  live "  rebuild: $(tail -1 "$RUN/logs/rebuild.txt" 2>/dev/null)"
+fi
 
 log "publish"; "$HERE/render.py" "$RUN" "$DEST" "$slug" final 2>&1 | tee -a "$RUN/logs/pipeline.log"
 # A copy on Logos Storage, where the host runs a node (host/50-storage.sh).

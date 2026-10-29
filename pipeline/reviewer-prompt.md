@@ -86,16 +86,12 @@ nlohmann-json, OpenSSL); check before installing anything.
      shots in "What I ran". `desk stop` when you are done.
    - The module may need peers or network services the sandbox doesn't have.
      Test what works alone; say what needed a peer and wasn't tested.
-   - **Is the published package what its source builds?** Nix is here (as pavel).
-     Most Logos modules build with `nix build '.#lgx-portable'` (look at the
-     repository's own build or release scripts first). Start it EARLY, in the
-     background, since it can take a long time:
-     `as-module bash -c 'cp -r /run/src ~/nb && cd ~/nb/<module dir> && nohup nix build ".#lgx-portable" -o ~/nb/out > /run/modlog/nix-build.log 2>&1 &'`
-     and carry on. When it's done, `lgx-compare /run/lgx/<published>.lgx <rebuilt>.lgx`
-     (copy the rebuilt one somewhere you can read it, as pavel). Every platform
-     both have is compared; SAME means the published files are what this commit
-     builds. A DIFFERS is a finding of its own; a build that fails or runs out
-     of time goes under "What I did not test", with why.
+   - **Is the published package what its source builds?** The pipeline rebuilds
+     every published package from this commit with Nix, beside you, in a
+     container of its own; the verdict lands in `/run/rebuild/rebuild.json`
+     (usually 5–20 minutes in): `identical` per platform, `differs` (a finding),
+     or `not built` (say why, from `/run/rebuild/logs/`). Cite it in the report.
+     You needn't build with Nix yourself; it's here (as pavel) if a probe needs it.
 3. **Attack it. Write probes and RUN them.** For each plausible weakness, construct a
    concrete exploit — a malformed signed message, a path-traversal id, an oversized
    input, a symlink, a poisoned dependency, an injection — put the probe in

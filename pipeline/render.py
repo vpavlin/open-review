@@ -132,7 +132,7 @@ if mode=="live":
 # text, JSON or media: whatever else the module left in these folders stays
 # here (FR-16). Caddy types files by extension.
 PUBLISH=(".png",".mp4",".txt",".log",".json",".jsonl",".err",".out",".mitm")
-for sub in ("logs","checks","build","behaviour","media"):
+for sub in ("logs","checks","build","behaviour","media","rebuild"):
     for rel in files_beneath(sub):
         if not rel.lower().endswith(PUBLISH): continue
         to=os.path.join(dest,rel); os.makedirs(os.path.dirname(to),exist_ok=True)
@@ -323,6 +323,7 @@ lgxsum=readf(os.path.join("logs","lgx.sha256")).strip()
 PKGS=[p for p in (readjson(f) for f in files_beneath("logs") if re.fullmatch(r"logs/package(-.+)?\.json",f)) if isinstance(p,dict)]
 PKGS.sort(key=lambda p:(not str(p.get("type","")).startswith("ui"),str(p.get("name"))))
 PKG=PKGS[0] if PKGS else None
+REBUILT=readjson(os.path.join("rebuild","rebuild.json"))
 ORC=readf(os.path.join("logs","pipeline-commit")).strip()
 ORC=ORC if re.fullmatch(r"[0-9a-f]{40}",ORC or "") else ""
 def evaluated():
@@ -334,6 +335,12 @@ def evaluated():
 def one(PKG):
     o=PKG.get("official") or {}
     sg=PKG.get("signature") or {}
+    rb=(REBUILT.get(PKG.get("name")) or {}) if isinstance(REBUILT,dict) else {}
+    v=rb.get("verdict")
+    reb={"identical":"<b class=ok>rebuilt from this source: identical</b> ("+esc(", ".join(l.split()[1] for l in rb.get("compare",[]) if l.startswith("SAME     variants/")))+")",
+         "differs":"<b class=red>rebuilt from this source: DIFFERS</b>",
+         "not built":"not rebuilt (the build failed or found no flake; see rebuild/)",
+         "nothing to compare":"rebuilt, but no platform in common to compare"}.get(v,"")
     if sg.get("valid"):
         sig=(f"<b class=ok>signed</b> (key <code>{esc(sg.get('key','')[:20])}…</code>"
              + (f", the repository's <code>{esc(sg['key_in_repository'])}</code>)" if sg.get("key_in_repository") else ", <b class=red>not a key in the repository</b>)"))
@@ -346,7 +353,7 @@ def one(PKG):
     else: cat="<b class=red>the official catalogue lists this version with a different rootHash</b>"
     return (f"<div class=evaluated>Evaluated <b>{esc(PKG.get('name'))} {esc(PKG.get('version'))}</b> "
             f"({esc(PKG.get('type',''))}, {esc(', '.join(PKG.get('variants') or []))}) · rootHash <code>{esc(str(PKG.get('rootHash'))[:16])}…</code>"
-            f" · sha256 <code>{esc(PKG.get('sha256','')[:16])}…</code> · {sig} · {cat}</div>")
+            f" · sha256 <code>{esc(PKG.get('sha256','')[:16])}…</code> · {sig} · {cat}{(' · '+reb) if reb else ''}</div>")
 imgid=readf(os.path.join("logs","image")).strip()[:19]
 # When the review ran (the clock it was given), not when this page was made.
 try: when=time.strftime('%Y-%m-%d %H:%M UTC',time.gmtime(int(readf(os.path.join("logs","clock")).split()[0])))
