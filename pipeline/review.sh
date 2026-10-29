@@ -37,7 +37,12 @@ LGX=$(printf '%s\n' "${@:3}")
 url_ok(){ [[ "$1" =~ ^https://[A-Za-z0-9.-]+(/[A-Za-z0-9._~%+@:/-]*)?$ ]]; }
 if [[ "$REPO" != localdir:* ]] && ! url_ok "$REPO"; then echo "not a repository URL: $REPO"; exit 2; fi
 [[ "$COMMIT" =~ ^([0-9a-f]{7,40}|HEAD)$ ]] || { echo "not a commit: $COMMIT"; exit 2; }
-for u in "${@:3}"; do url_ok "$u" || { echo "not a package URL: $u"; exit 2; }; done
+# A package may also be a file the operator put in ~/inputs on this host
+# ("localfile:<name>.lgx"): a release that isn't public, such as WhisperBox
+# 0.5.0's linux-amd64 build, served only on the publisher's LAN (2026-10-29).
+INPUTS=/home/reviewer/inputs
+pkg_ok(){ url_ok "$1" || [[ "$1" =~ ^localfile:[A-Za-z0-9._-]+\.lgx$ && -f "$INPUTS/${1#localfile:}" ]]; }
+for u in "${@:3}"; do pkg_ok "$u" || { echo "not a package URL: $u"; exit 2; }; done
 slug=$(printf '%s-%s' "$(basename "$REPO" .git)" "${COMMIT:0:12}" | tr -c 'A-Za-z0-9._-' -)
 # What the sandbox's user wrote belongs to a sub-uid here: removed inside
 # podman's user namespace, as the agent's archive does (shrooms ADR-072).
@@ -73,7 +78,12 @@ if [ -n "$LGX" ]; then
   mkdir -p "$RUN/lgx"
   # Each package, and its detached signature where the publisher gives one
   # (<package>.sig); names are cleaned with no newline, which tr made "_".
-  inbox bridge 'echo "$LGX" | while IFS= read -r u; do [ -n "$u" ] || continue
+  for u in "${@:3}"; do
+    [[ "$u" == localfile:* ]] || continue
+    f=${u#localfile:}; cp "$INPUTS/$f" "$RUN/lgx/$f"; [ -f "$INPUTS/$f.sig" ] && cp "$INPUTS/$f.sig" "$RUN/lgx/$f.sig"
+    live "  $f: from this host's inputs, not downloaded"
+  done
+  inbox bridge 'echo "$LGX" | while IFS= read -r u; do [ -n "$u" ] || continue; case $u in localfile:*) continue;; esac
       f=$(printf %s "${u##*/}" | tr -c "A-Za-z0-9._-" _)
       curl -sSfL --max-time 300 -o "lgx/$f" -- "$u" || echo "could not download $u" >&2
       curl -sfL --max-time 60 -o "lgx/$f.sig" -- "$u.sig" || rm -f "lgx/$f.sig"

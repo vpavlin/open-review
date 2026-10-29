@@ -80,7 +80,8 @@ def add(argv):
     if not COMMIT.match(commit):
         sys.exit(f"refused: not a commit (7-40 hex characters, or HEAD): {commit}")
     for u in lgx:
-        if not URL.match(u):
+        # Or a package the operator put on this host (review.sh: localfile:).
+        if not (URL.match(u) or re.match(r"^localfile:[A-Za-z0-9._-]+\.lgx$", u)):
             sys.exit(f"refused: not a package URL: {u}")
     for state in ("pending", "running"):
         for j in jobs(state):
