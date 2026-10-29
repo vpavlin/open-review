@@ -102,6 +102,28 @@ RUN userdel -r ubuntu 2>/dev/null; useradd -m -u 1000 -s /bin/bash pavel
 # reviewer's report or probes (open-review's own review, FR-2/FR-14).
 RUN useradd -m -u 1001 -s /bin/bash ondra && chmod 750 /home/pavel /home/ondra
 
+# Nix, so a module is built the way its author builds it (most Logos modules:
+# nix build '.#lgx-portable') and the result compared with what was published
+# (lgx-compare). Single-user, owned by pavel: a build is untrusted code and runs
+# as the module's user. Every review starts from this image's store and throws
+# it away, so no review can poison the next. Substituters: NixOS's cache and the
+# official Logos cache; a reviewed flake's own nixConfig is NOT accepted, so it
+# can't bring binaries of its choosing.
+ARG NIX_VERSION=2.35.4
+ARG NIX_SHA256=ff66236d2f7e2a21f3350e73668e021ac6a8881ef277a38e16e952bfb22718c3
+RUN set -eux; mkdir -m 0755 /nix && chown pavel:pavel /nix; \
+    curl -fsSL -o /tmp/nix.tar.xz "https://releases.nixos.org/nix/nix-${NIX_VERSION}/nix-${NIX_VERSION}-x86_64-linux.tar.xz"; \
+    echo "${NIX_SHA256}  /tmp/nix.tar.xz" | sha256sum -c; \
+    mkdir /tmp/nixi && tar -xJf /tmp/nix.tar.xz -C /tmp/nixi --strip-components=1 && chown -R pavel:pavel /tmp/nixi; \
+    mkdir -p /etc/nix && printf '%s\n' 'experimental-features = nix-command flakes' 'sandbox = false' \
+      'build-users-group =' 'accept-flake-config = false' \
+      'extra-substituters = https://cache.nix.logos.co/public' \
+      'extra-trusted-public-keys = public:l4HrXgL4nw246+LBh2SOJyhz64BoGegOYLheT/iIAPU=' > /etc/nix/nix.conf; \
+    su pavel -c "cd /tmp/nixi && HOME=/home/pavel USER=pavel ./install --no-daemon --no-channel-add --no-modify-profile"; \
+    rm -rf /tmp/nix.tar.xz /tmp/nixi; \
+    for b in /home/pavel/.nix-profile/bin/*; do ln -sf "$(readlink -f "$b")" /usr/local/bin/; done; \
+    su pavel -c "nix --version"
+
 COPY disguise.sh bait.sh record.sh profiles.json /usr/local/sbin/
 RUN chmod +x /usr/local/sbin/disguise.sh /usr/local/sbin/bait.sh /usr/local/sbin/record.sh
 

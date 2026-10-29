@@ -33,6 +33,7 @@ HOME_DIR="$MH" /usr/local/sbin/disguise.sh /usr/local/sbin/profiles.json "$B/dis
 /usr/local/sbin/bait.sh "$MH" "$B/bait.json" >/dev/null 2>&1 || true
 chmod 644 /tmp/disguise.env 2>/dev/null
 ln -sf /pipeline/as-module.sh /usr/local/bin/as-module
+ln -sf /pipeline/lgx-compare.sh /usr/local/bin/lgx-compare
 
 # Every lookup goes through the sink, which logs it and answers (FR-3).
 python3 /pipeline/dns_sink.py "$B/dns.log" & SINK=$!
@@ -44,8 +45,11 @@ sleep 1; echo "nameserver 127.0.0.1" > /etc/resolv.conf
 # made it. Root's own traffic (the proxies', the sink's) is not redirected.
 proxy() {  # proxy <port> <log name>
   mitmdump --mode transparent --listen-host 127.0.0.1 --listen-port "$1" --showhost -q \
-    --set confdir=/root/.mitmproxy --set block_global=false \
-    -s /pipeline/proxy_log.py --set review_log="$B/$2.jsonl" -w "$B/$2.mitm" > "$B/$2.out" 2>&1 &
+    --set confdir=/root/.mitmproxy --set block_global=false --set stream_large_bodies=1m \
+    -s /pipeline/proxy_log.py --set review_log="$B/$2.jsonl" > "$B/$2.out" 2>&1 &
+  # No full flow file and no big bodies held: a Nix build downloads gigabytes
+  # through here, and the request log (what, where, the start of what was
+  # sent) is what the review uses.
 }
 proxy 8080 proxy; PROXY=$!
 for _ in $(seq 1 30); do [ -s /root/.mitmproxy/mitmproxy-ca-cert.pem ] && break; sleep 0.5; done
