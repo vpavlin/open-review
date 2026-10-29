@@ -68,6 +68,12 @@ else
 inbox bridge 'git clone --quiet --filter=blob:none -- "$REPO" src 2>&1 | tail -3; cd src && git checkout --quiet "$COMMIT" -- 2>/dev/null; git rev-parse HEAD > /run/logs/commit 2>/dev/null; true'
 fi
 echo "$REPO" > "$RUN/logs/repo"
+# The commit asked for, or nothing: a checkout that failed left the clone at
+# its default branch, and a review of WhisperBox "@ 302a134…" started on
+# main's 62a5336 instead (2026-10-29, a mistyped full hash).
+if [ "$COMMIT" != HEAD ] && [[ "$REPO" != localdir:* ]] && [[ "$(cat "$RUN/logs/commit" 2>/dev/null)" != "$COMMIT"* ]]; then
+  live "the commit $COMMIT isn't in $REPO: stopped"; log "commit $COMMIT not found (clone is at $(cat "$RUN/logs/commit" 2>/dev/null))"; exit 2
+fi
 
 # The published package, if there is one: the reviewer installs this into
 # Basecamp, so what is tested is what users install. (Its name is cleaned
