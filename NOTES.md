@@ -284,3 +284,23 @@ A running log: newest last. What was done, why, and what was found.
   One hand-made tweak found on the host while doing it: the review user's
   ~/.profile exported REVIEW_BASE with the IP, overriding the repository's
   default. Removed; the VM never had it.
+
+## 2026-10-29: LNS reviewed; published packages rebuilt from source
+
+- **LNS review** (0.68 DIEM, finished on its own): Critical. FR-1 with a
+  working exploit: any app declaring the `names` dependency can call its
+  privileged RPCs unprompted (wallet, identity, sequencer, CLI); FR-2: the
+  published names_ui 0.10.1 doesn't load (`.public`, a reserved word in QML's
+  JS); FR-3: vulnerable TLS trust store plus a plain-http sequencer path. The
+  crypto core held. Václav sends it to jefdiesel.
+- **Nix in the sandbox** (0e3de2c) and **a rebuild stage** (5fa4eff): every
+  published package is rebuilt from the reviewed commit, beside the review,
+  and compared per platform. First try differed only in Rust's embedded build
+  paths (sandbox off: /nix/var/nix/builds/…; the release: /build/). Nix's
+  sandbox needs SYS_ADMIN and an unmasked /proc, which would show the host's
+  processes in the disguised sandbox, so the rebuild has its own container.
+  Result: LNS names 0.9.0 and names_ui 0.10.1 rebuild **byte-identical** to
+  the published Linux builds (125 s and 6 s). The verdict is in the report's
+  header and at /run/rebuild for the reviewer (root's; the module can't write it).
+- **atlas** wasn't frozen: its e1000e NIC hung for 13 h (see the shrooms
+  memory); a watchdog now resets it.
