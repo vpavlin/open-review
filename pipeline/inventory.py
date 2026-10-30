@@ -40,6 +40,40 @@ CONTEXT = re.compile(r"class\s+\w+\s*:\s*public\s+LogosModuleContext\b")
 PUBLIC_METHOD = re.compile(r"^\s+(?:virtual\s+|static\s+)?[\w:<>,\s*&]+?\b(\w+)\s*\([^;{]*\)\s*(?:const\s*)?(?:override\s*)?;")
 
 
+RUST_FN = re.compile(r"^\s*fn\s+(\w+)\s*[<(]")
+
+
+def rust_traits(root, roots):
+    """The traits a Rust module exposes (metadata.json codegen.rust.trait; LNS)."""
+    names = set()
+    for r in roots:
+        try:
+            m = json.load(open(os.path.join(root, r, "metadata.json")))
+            t = (((m.get("codegen") or {}).get("rust") or {}).get("trait"))
+            if t:
+                names.add(t)
+        except (OSError, ValueError, AttributeError):
+            pass
+    return names
+
+
+def trait_methods(text, traits):
+    out = []
+    for t in traits:
+        m = re.search(r"\btrait\s+" + re.escape(t) + r"\b[^{]*\{", text)
+        if not m:
+            continue
+        start, depth = text[:m.end()].count("\n") + 1, 1
+        for i, l in enumerate(text[m.end():].splitlines(), start):
+            fm = RUST_FN.match(l)
+            if fm and depth == 1:
+                out.append((i, fm.group(1)))
+            depth += l.count("{") - l.count("}")
+            if depth <= 0:
+                break
+    return out
+
+
 def exposed(text):
     """(line, name) of every method the module exposes in this file."""
     out = []
@@ -91,6 +125,30 @@ def main():
     # What the module is: the folders with a metadata.json (a repository may
     # also hold a phone app, tools, a site), and the build at the top.
     roots = sorted({os.path.dirname(r) for r in walk(root) if os.path.basename(r) == "metadata.json"})
+    # And what the modules link in from elsewhere in the repository: a Rust
+    # library at the top that builds the module's shared library (Logos
+    # Agent's core is ./src, shipped as liblogos_agent.so beside module/ and
+    # app/), and folders a module's build reaches with "../".
+    if roots and "" not in roots:
+        extra = set()
+        try:
+            cargo = open(os.path.join(root, "Cargo.toml")).read()
+            if "cdylib" in cargo or "staticlib" in cargo:
+                extra.update(d for d in ("src", "crates") if os.path.isdir(os.path.join(root, d)))
+        except OSError:
+            pass
+        for r in list(roots):
+            for b in ("CMakeLists.txt", "flake.nix", "Cargo.toml"):
+                try:
+                    t = open(os.path.join(root, r, b)).read()
+                except OSError:
+                    continue
+                for m in re.findall(r"\.\./([A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*)", t):
+                    d = os.path.normpath(os.path.join(r, "..", m))
+                    if not d.startswith("..") and os.path.isdir(os.path.join(root, d)) and d.split("/")[0] not in SKIP_DIRS:
+                        extra.add(d)
+        roots = sorted(set(roots) | extra)
+    traits = rust_traits(root, roots)
     in_module = lambda rel: not roots or "" in roots or any(rel == r or rel.startswith(r + "/") for r in roots) \
         or ("/" not in rel and os.path.basename(rel) in BUILD)
     for rel in walk(root):
@@ -110,7 +168,7 @@ def main():
         text = open(p, errors="replace").read() if is_src else ""
         # Every method the module exposes is a way in, whatever the focus:
         # the UI calls them, and so can any other module.
-        for i, mname in exposed(text):
+        for i, mname in exposed(text) + (trait_methods(text, traits) if ext == ".rs" and traits else []):
             methods.append({"id": f"method:{rel}:{mname}", "kind": "method", "path": rel, "line": i, "name": mname})
         net, ui = bool(NET.search(rel) or NET.search(text[:200000])), bool(UI.search(rel))
         if focus == "ui" and not (ui or is_build and name == "metadata.json"):

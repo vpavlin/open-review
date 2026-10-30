@@ -129,6 +129,23 @@ MAX_MIN=${REVIEW_MAX_MIN:-240}
 # The reviewer's clock (desk time). Run 4 never knew it had a limit, tested
 # until it was cut off and wrote nothing.
 echo "$(date +%s) $MAX_MIN" > /run/logs/clock
+# Progress, every two minutes, as root (the reviewer can't write the logs):
+# spend, coverage and findings over time, for what a focus costs to cover
+# (the benchmark, 2026-10-30).
+( while :; do
+    python3 - <<'PY2' >> /run/logs/progress.jsonl 2>/dev/null
+import json,time,subprocess
+t0,mx=open("/run/logs/clock").read().split()
+try: sp=json.load(open("/run/logs/spend.json"))["spent"]
+except Exception: sp=0
+try: c=json.loads(subprocess.run(["python3","/pipeline/coverage.py","/run/inventory.json","/run/src/coverage.json","--json"],capture_output=True,text=True).stdout)
+except Exception: c={}
+try: f=len(json.load(open("/run/src/report.json")).get("findings",[]))
+except Exception: f=None
+print(json.dumps({"min":round((time.time()-int(t0))/60,1),"spent":sp,"covered":c.get("covered"),"items":c.get("items"),
+                  "pct":c.get("pct"),"lines_pct":c.get("lines_pct"),"findings":f}))
+PY2
+    sleep 120; done ) & PROGRESS=$!
 strace -f -qq -e trace=openat,open,connect,execve,unlinkat,unlink,rename -e signal=none -s 300 -o "$B/strace.log" \
   bash -c "python3 /pipeline/module_broker.py /run/desk/module.sock & echo \$! > /run/rec/broker.pid; for i in \$(seq 1 40); do [ -S /run/desk/module.sock ] && break; sleep 0.25; done; $(declare -f as_user); U=$U UH=$UH; as_user timeout --kill-after=60 ${MAX_MIN}m bash /pipeline/review-loop.sh ${REVIEW_MODEL} ${REVIEW_FOCUS:-security}" \
   > /run/logs/session.txt 2>&1 &
@@ -169,6 +186,7 @@ cp /run/logs/session.txt /run/session.log 2>/dev/null || true
 
 # The instruments stop. The recorder writes its index on SIGINT; killed
 # harder, the mp4 won't play.
+kill $PROGRESS 2>/dev/null
 kill -INT $RECORDER 2>/dev/null
 for _ in $(seq 1 60); do kill -0 $RECORDER 2>/dev/null || break; sleep 0.5; done
 kill -9 $RECORDER $XVFB 2>/dev/null; kill $PROXY $PROXY2 2>/dev/null; sleep 1; kill $SINK 2>/dev/null
