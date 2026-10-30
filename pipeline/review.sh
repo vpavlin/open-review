@@ -16,7 +16,8 @@ STATE=/home/reviewer/.review
 if [ -z "${REVIEW_SNAPSHOT:-}" ]; then
   mkdir -p "$STATE"
   exec 9>"$STATE/lock"
-  flock -n 9 || { echo "a review is already running (review-stop.sh ends it)"; exit 1; }
+  # Exit 75 (EX_TEMPFAIL): the queue puts the job back rather than closing it.
+  flock -n 9 || { echo "a review is already running (review-stop.sh ends it)"; exit 75; }
   # Whatever an earlier, interrupted review left: no review holds the lock now.
   for c in $(podman ps -q --filter ancestor=localhost/open-reviewer:latest); do podman kill "$c" >/dev/null; done
   SNAP=$STATE/pipeline-$(date -u +%Y%m%d-%H%M%S)

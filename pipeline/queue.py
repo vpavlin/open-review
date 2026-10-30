@@ -168,6 +168,13 @@ def run():
                 env["REVIEW_MAX_MIN"] = str(job["max_min"])
             rc = subprocess.run(["bash", os.path.join(HERE, "review.sh")] + args, stdout=log, stderr=subprocess.STDOUT,
                                 env=env).returncode
+        if rc == 75:
+            # Another review holds the lock (review.sh): not this job's
+            # failure. Back to the front, and wait.
+            job["state"] = "pending"; job.pop("started", None)
+            job["waiting"] = "waiting: another review is running"
+            save(job, "pending")
+            time.sleep(300); continue
         try:
             r = json.load(open(f"/srv/reviews/{job['slug']}/review.json"))
             job["result"] = r.get("pill", "")
