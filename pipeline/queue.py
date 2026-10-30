@@ -3,7 +3,8 @@
 # and one runner takes them one at a time, as the review lock demands, and
 # only when the day's model budget can pay for a whole review.
 #
-#   queue.py add <repo-url> [<commit>] [<lgx-url>…] [--focus security|p2p|ui|full] [--from WHO] [--notify JSON]
+#   queue.py add <repo-url> [<commit>] [<lgx-url>…] [--focus security|p2p|ui|full]
+#                 [--budget DIEM] [--max-min MIN] [--tag NAME] [--from WHO] [--notify JSON]
 #   queue.py list [--json]
 #   queue.py run                  the runner (a user service on the review host)
 #
@@ -61,7 +62,7 @@ def notify(job, event):
 
 
 def add(argv):
-    who, how, focus = "unknown", None, "security"
+    who, how, focus, budget, maxmin, tag = "unknown", None, "security", None, None, None
     args = []
     i = 0
     while i < len(argv):
@@ -69,6 +70,14 @@ def add(argv):
             who = argv[i + 1]; i += 2
         elif argv[i] == "--focus":
             focus = argv[i + 1]; i += 2
+        # A job's own cap and time limit (the benchmark's 1.5 DIEM, 330 min);
+        # the operator's, never a submitter's: whisperbox.py doesn't pass them.
+        elif argv[i] == "--budget":
+            budget = float(argv[i + 1]); i += 2
+        elif argv[i] == "--max-min":
+            maxmin = int(argv[i + 1]); i += 2
+        elif argv[i] == "--tag":
+            tag = argv[i + 1]; i += 2
         elif argv[i] == "--notify":
             how = json.loads(argv[i + 1]); i += 2
         else:
@@ -90,12 +99,12 @@ def add(argv):
         sys.exit(f"refused: not a focus: {focus} ({', '.join(FOCI)})")
     for state in ("pending", "running"):
         for j in jobs(state):
-            if j["repo"] == repo and j["commit"] == commit and j.get("focus", "security") == focus:
+            if j["repo"] == repo and j["commit"] == commit and j.get("focus", "security") == focus and j.get("tag") == tag:
                 print(f"already {state}: {j['id']}, {BASE}/{j['slug']}/live.html")
                 return
     s = slug(repo, commit, focus)
     job = {"id": time.strftime("%Y%m%d-%H%M%S-") + uuid.uuid4().hex[:6], "repo": repo, "commit": commit,
-           "lgx": lgx, "focus": focus, "from": who, "notify": how, "added": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+           "lgx": lgx, "focus": focus, "budget": budget, "max_min": maxmin, "tag": tag, "from": who, "notify": how, "added": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
            "state": "pending", "slug": s, "live": f"{BASE}/{s}/live.html", "report": f"{BASE}/{s}/"}
     save(job, "pending")
     pos = len(jobs("pending")) + len(jobs("running"))
@@ -137,7 +146,7 @@ def run():
         job = pending[0]
         b = balance()
         diem = (b.get("balances") or {}).get("DIEM")
-        need = FOCI.get(job.get("focus", "security"), 1.0)
+        need = job.get("budget") or FOCI.get(job.get("focus", "security"), 1.0)
         if diem is None or diem < need + 0.05:
             # Not enough for a whole review: wait for the day's allowance.
             job["waiting"] = (f"waiting for the model budget ({diem:.2f} DIEM left, a {job.get('focus','security')} review needs {need:.2f}; "
@@ -153,6 +162,10 @@ def run():
         args = [job["repo"], job["commit"]] + ([l] if isinstance(l, str) else l)
         with open(os.path.expanduser(f"~/runs-{job['slug']}.log"), "w") as log:
             env = dict(os.environ, REVIEW_FOCUS=job.get("focus", "security"))
+            if job.get("budget"):
+                env["REVIEW_BUDGET"] = str(job["budget"])
+            if job.get("max_min"):
+                env["REVIEW_MAX_MIN"] = str(job["max_min"])
             rc = subprocess.run(["bash", os.path.join(HERE, "review.sh")] + args, stdout=log, stderr=subprocess.STDOUT,
                                 env=env).returncode
         try:
