@@ -304,3 +304,25 @@ A running log: newest last. What was done, why, and what was found.
   header and at /run/rebuild for the reviewer (root's; the module can't write it).
 - **atlas** wasn't frozen: its e1000e NIC hung for 13 h (see the shrooms
   memory); a watchdog now resets it.
+
+## 2026-10-30: audits, not samples (c0a0af0)
+
+- **WhisperBox 0.5.0 → 0.5.1 → 0.5.2** (0.43, 0.39, 0.48 DIEM): 3, 1, then 4
+  highs. All four 0.5.2 highs are in code 0.5.0 already had (git blame: co-
+  owners 3 Oct, CSV export Aug–Oct); the fixes held. Each run read 16-22 of
+  the module's files, a different sample, and stopped by itself at under half
+  its budget; the same issue was Low (0.5.1 FR-9) and then High (0.5.2 FR-4).
+- Václav: no previous report for re-reviews (the auditor stays blind); use the
+  whole budget, more if needed; a review should cover something completely,
+  and submitters may choose what: security, p2p, ui.
+- So: a **focus** per review (queue `--focus`, the WhisperBox form's focus
+  question); **inventory.py** lists every file in the module's folders (those
+  with a metadata.json) and every method it exposes (Q_INVOKABLE, or the
+  public methods of a LogosModuleContext class), for that focus, before the
+  reviewer starts (WhisperBox: 19 files, 31 methods, 8.4k lines);
+  **coverage.json**, counted by coverage.py (a note required; a file over 300
+  lines counts only with 90% of it read); **review-loop.sh** sends the session
+  back while budget and time remain, to what's uncovered, then deeper; a
+  **fixed severity scale**. Full: 1.8 DIEM, 6 h; others 1.0 DIEM, 4 h. Slugs
+  now end in the focus. Tested on the VM with the stand-in (loop, coverage on
+  the page, sandbox 31/31).
