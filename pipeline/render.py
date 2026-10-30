@@ -137,7 +137,7 @@ for sub in ("logs","checks","build","behaviour","media","rebuild"):
         if not rel.lower().endswith(PUBLISH): continue
         to=os.path.join(dest,rel); os.makedirs(os.path.dirname(to),exist_ok=True)
         copy_beneath(rel,to)
-for f in ("report.md","live.txt","session.log","gateway.jsonl","report.json"):
+for f in ("report.md","live.txt","session.log","gateway.jsonl","report.json","inventory.json","coverage.json"):
     copy_beneath(f,os.path.join(dest,f))
 # hash-chain + meta
 import hashlib
@@ -409,8 +409,34 @@ footer{color:var(--dim);font-size:.85em;margin-top:2em;border-top:1px solid var(
 """
 write("live.html", f"""<!doctype html><meta charset=utf-8><title>{esc(slug)} — done</title><style>{CSS}</style>
 <h1>{esc(slug)}</h1><p>Review finished. <a href="index.html">Read the report →</a></p>""")
+# What the review covered of what it had to (inventory.py, coverage.py).
+sys.path.insert(0,os.path.dirname(os.path.abspath(__file__)))
+import coverage as _cov
+FOCUS=readf(os.path.join("logs","focus")).strip() or "security"
+INV=readjson("inventory.json"); COVJ=readjson("coverage.json")
+COV=_cov.summary(INV,COVJ if isinstance(COVJ,dict) else {}) if isinstance(INV,dict) and INV.get("items") else None
+def coverage_html():
+    if not COV: return "<p>No inventory was made for this review: it predates them (2026-10-30), or the inventory failed.</p>"
+    cj=COVJ if isinstance(COVJ,dict) else {}
+    rows="".join(
+        f"<tr><td><code>{esc(i['id'].split(':',1)[1])}</code></td><td>{esc(i.get('lines',''))}</td>"
+        f"<td>{esc((cj.get(i['id']) or {}).get('status','not marked') if isinstance(cj.get(i['id']),dict) else 'not marked')}</td>"
+        f"<td>{esc(str((cj.get(i['id']) or {}).get('note','') if isinstance(cj.get(i['id']),dict) else '')[:400])}"
+        f"{'' if not why else ' <span class=red>('+esc(why)+')</span>'}</td></tr>"
+        for i,why in ((i,_cov.judge(i,cj.get(i['id']))) for i in INV["items"]))
+    scr="".join(f"<li>{esc(k[7:])}: {esc(str(v.get('note',''))[:300])}</li>" for k,v in cj.items()
+                if k.startswith("screen:") and isinstance(v,dict))
+    return (f"<p><b>Focus: {esc(FOCUS)}</b>: {esc(INV.get('scope',''))}. Listed from the source before the review "
+            f"began: {INV.get('files',0)} files and {INV.get('methods',0)} exposed methods, {INV.get('lines',0):,} lines "
+            f"in {', '.join(esc(r or '.') for r in INV.get('module_roots',[])) or 'the repository'}. "
+            f"<b>Covered: {COV['covered']} of {COV['items']} items ({COV['pct']}%), {COV['lines_pct']}% of the lines.</b> "
+            "An item counts only with a note on what was checked, and a file over 300 lines only when what was read "
+            "spans 90% of it.</p>"
+            + (f"<p>Screens: </p><ul>{scr}</ul>" if scr else "")
+            + f"<details><summary>Every item</summary><table><tr><th>Item</th><th>Lines</th><th>Status</th><th>What was checked</th></tr>{rows}</table></details>"
+            + (f"<p>Outside the module, not in scope: {len(INV.get('outside_module',[]))} files (a phone app, tools, a site…).</p>" if INV.get('outside_module') else ""))
 modname=(readjson(os.path.join("src","metadata.json")) or {}).get("name") if isinstance(readjson(os.path.join("src","metadata.json")),dict) else None
-title=modname or slug.rsplit("-",1)[0]
+title=modname or re.sub(r"-(security|p2p|ui|full)$","",slug).rsplit("-",1)[0]
 write("index.html", f"""<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>
 <title>{esc(title)} — open review</title><style>{PAGE_CSS}</style><main>
 <p><a href="/">← all reviews</a></p>
@@ -420,6 +446,8 @@ write("index.html", f"""<!doctype html><meta charset=utf-8><meta name=viewport c
 <div class=chips>{chips}</div>
 {evaluated()}
 <div class=facts>
+<div class=fact><b>Focus</b>{esc(FOCUS)}</div>
+<div class=fact><b>Coverage</b>{f"{COV['pct']}% of {COV['items']} items" if COV else "not measured"}</div>
 <div class=fact><b>Reviewed</b>{esc(when)}</div>
 <div class=fact><b>Model</b>{esc(MODEL.split('/')[-1])}</div>
 <div class=fact><b>Cost</b>{esc(cost)}</div>
@@ -431,8 +459,9 @@ write("index.html", f"""<!doctype html><meta charset=utf-8><meta name=viewport c
 {block('What the module did', behaviour)}
 {block(f'Findings ({len(flist)})', cards or "<p>See <a href='report.md'>report.md</a>.</p>") if not FAILED else ''}
 {block('Screens and recording', gallery())}
+{block('Coverage', coverage_html())}
 {block('What is solid', mdsafe.render(section('What is solid'),shift=1))}
-{block('What was not tested', mdsafe.render(section('What I did not test','What was not tested'),shift=1) or ('<ul>'+nottested+'</ul>' if nottested else ''))}
+{block('What was not tested', mdsafe.render(section('Coverage and what I did not test','What I did not test','What was not tested'),shift=1) or ('<ul>'+nottested+'</ul>' if nottested else ''))}
 {block('Suggested order', mdsafe.render(section('Suggested order'),shift=1))}
 {block('What the reviewer ran', mdsafe.render(section('What I ran'),shift=1) or ('<ul>'+ran+'</ul>' if ran else ''))}
 {block('Usage and cost', usage)}
@@ -448,7 +477,8 @@ Reviewed by open-review {f'<a href="https://github.com/vpavlin/open-review/tree/
 # For the list of reviews.
 json.dump({"slug":slug,"title":title,"repo":repo,"commit":commit,"when":when,"verdict":worst,"pill":pill,
            "counts":counts,"cost":cost,"summary":(rep or {}).get("verdict_summary","") if isinstance((rep or {}).get("verdict_summary",""),str) else "",
-           "failed":bool(FAILED),"lgx":lgxsum.split()[0] if lgxsum else "","package":PKG,"open_review_commit":ORC,
+           "failed":bool(FAILED),"lgx":lgxsum.split()[0] if lgxsum else "","package":PKG,"open_review_commit":ORC,"focus":FOCUS,
+           "coverage":({k:COV[k] for k in ("items","covered","pct","lines_pct")} if COV else None),
            # A re-render keeps the Logos Storage copy storage.py made.
            "storage":(json.load(open(os.path.join(dest,"storage.json"))) if os.path.isfile(os.path.join(dest,"storage.json")) else None)},
           open(os.path.join(dest,"review.json"),"w"))

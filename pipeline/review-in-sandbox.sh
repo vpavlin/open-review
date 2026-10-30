@@ -125,12 +125,12 @@ as_user() {
 cd /run/src 2>/dev/null || { echo '{"error":"no source"}' > "$B/summary.json"; kill $SINK $PROXY $PROXY2 $RECORDER $XVFB 2>/dev/null; exit 0; }
 # A hard cap on the review's time (the proposal's promise); a run that hits
 # it is published with what it has and says so.
-MAX_MIN=${REVIEW_MAX_MIN:-150}
+MAX_MIN=${REVIEW_MAX_MIN:-240}
 # The reviewer's clock (desk time). Run 4 never knew it had a limit, tested
 # until it was cut off and wrote nothing.
 echo "$(date +%s) $MAX_MIN" > /run/logs/clock
 strace -f -qq -e trace=openat,open,connect,execve,unlinkat,unlink,rename -e signal=none -s 300 -o "$B/strace.log" \
-  bash -c "python3 /pipeline/module_broker.py /run/desk/module.sock & echo \$! > /run/rec/broker.pid; for i in \$(seq 1 40); do [ -S /run/desk/module.sock ] && break; sleep 0.25; done; $(declare -f as_user); U=$U UH=$UH; as_user timeout --kill-after=60 ${MAX_MIN}m pi --model venice/${REVIEW_MODEL} -p 'Your instructions are in /pipeline/reviewer-prompt.md. Read all of it first, then do what it says.'" \
+  bash -c "python3 /pipeline/module_broker.py /run/desk/module.sock & echo \$! > /run/rec/broker.pid; for i in \$(seq 1 40); do [ -S /run/desk/module.sock ] && break; sleep 0.25; done; $(declare -f as_user); U=$U UH=$UH; as_user timeout --kill-after=60 ${MAX_MIN}m bash /pipeline/review-loop.sh ${REVIEW_MODEL} ${REVIEW_FOCUS:-security}" \
   > /run/logs/session.txt 2>&1 &
 ST=$!
 # Wait for the reviewer, not for strace: strace -f waits for everything it
@@ -151,17 +151,20 @@ echo "$rc" > /run/logs/reviewer.rc
 # nothing more, on the report's own share of the budget. Forumer's fourth run
 # tested for 150 minutes and never wrote a line, though told to write as it
 # went; a draft written early misses what came after it.
-if [ "$rc" != 0 ] && [ ! -s /run/logs/inference-failed.txt ]; then
+# review-loop.sh exits 3 when its budget or time ran out, 0 when the
+# reviewer stopped making progress; either way the report is finished here
+# if it isn't written.
+if { [ "$rc" != 0 ] || [ ! -s /run/src/report.md ]; } && [ ! -s /run/logs/inference-failed.txt ]; then
   sed -i "s/\"apiKey\":\"${REVIEW_TOKEN}\"/\"apiKey\":\"${REPORT_TOKEN:-$REVIEW_TOKEN}\"/" "$UH/.pi/agent/models.json"
-  why="time"; [ -s /run/logs/budget-spent-testing.txt ] && why="budget"
-  as_user timeout --kill-after=30 25m pi --continue --model "venice/${REVIEW_MODEL}" -p "Your testing ${why} is used up: run no more tests, probes or desk commands. Finish /run/src/report.md and /run/src/report.json now (write them if they don't exist), in the exact format given in /pipeline/reviewer-prompt.md, from everything you found and ran in this session: the probes in /run/probes and their results, and the screenshots in /run/media (list them in What I ran). Mark what you did not finish as not tested. Then stop." \
+  why="time"; { [ -s /run/logs/budget-spent-testing.txt ] || grep -q "review-loop: testing budget" /run/logs/session.txt; } && why="budget"
+  as_user timeout --kill-after=30 25m pi --continue --model "venice/${REVIEW_MODEL}" -p "Your testing ${why} is used up: run no more tests, probes or desk commands. Finish /run/src/report.md and /run/src/report.json now (write them if they don't exist), in the exact format given in /pipeline/reviewer-prompt.md, and bring /run/src/coverage.json up to date (`desk coverage` counts it: that desk command is allowed), from everything you found and ran in this session: the probes in /run/probes and their results, and the screenshots in /run/media (list them in What I ran). Mark what you did not finish as not tested. Then stop." \
     > /run/logs/report-pass.txt 2>&1
   pkill -9 -u "$U" 2>/dev/null; pkill -9 -u "$M" 2>/dev/null
   [ -s /run/src/report.md ] && echo "Testing was stopped by its ${why} limit (exit $rc); the reviewer then finished its report from its session, testing nothing more." > /run/logs/written-after.txt
 fi
 
 # pi wrote report.md/report.json into /run/src; copy them up to the run root.
-for f in report.md report.json; do [ -f "/run/src/$f" ] && [ ! -L "/run/src/$f" ] && cp "/run/src/$f" "/run/$f"; done
+for f in report.md report.json coverage.json; do [ -f "/run/src/$f" ] && [ ! -L "/run/src/$f" ] && cp "/run/src/$f" "/run/$f"; done
 cp /run/logs/session.txt /run/session.log 2>/dev/null || true
 
 # The instruments stop. The recorder writes its index on SIGINT; killed

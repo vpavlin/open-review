@@ -3,7 +3,7 @@
 # and one runner takes them one at a time, as the review lock demands, and
 # only when the day's model budget can pay for a whole review.
 #
-#   queue.py add <repo-url> [<commit>] [<lgx-url>…] [--from WHO] [--notify JSON]
+#   queue.py add <repo-url> [<commit>] [<lgx-url>…] [--focus security|p2p|ui|full] [--from WHO] [--notify JSON]
 #   queue.py list [--json]
 #   queue.py run                  the runner (a user service on the review host)
 #
@@ -15,7 +15,8 @@ import json, os, re, subprocess, sys, time, uuid
 Q = os.path.expanduser("~/queue")
 HERE = os.path.dirname(os.path.abspath(__file__))
 BASE = os.environ.get("REVIEW_BASE", "https://or.vpavlin.xyz")
-BUDGET = float(os.environ.get("REVIEW_BUDGET", "1.0"))
+# What a review of each focus may spend (review.sh sets the same).
+FOCI = {"security": 1.0, "p2p": 1.0, "ui": 1.0, "full": 1.8}
 for d in ("pending", "running", "done"):
     os.makedirs(os.path.join(Q, d), exist_ok=True)
 
@@ -25,9 +26,9 @@ URL = re.compile(r"^https://[A-Za-z0-9.-]+(/[A-Za-z0-9._~%+@:/-]*)?$")
 COMMIT = re.compile(r"^([0-9a-f]{7,40}|HEAD)$")
 
 
-def slug(repo, commit):
+def slug(repo, commit, focus):
     name = re.sub(r"\.git$", "", repo.rstrip("/").rsplit("/", 1)[-1])
-    return re.sub(r"[^A-Za-z0-9._-]", "-", f"{name}-{commit[:12]}")
+    return re.sub(r"[^A-Za-z0-9._-]", "-", f"{name}-{commit[:12]}-{focus}")
 
 
 def jobs(state):
@@ -60,12 +61,14 @@ def notify(job, event):
 
 
 def add(argv):
-    who, how = "unknown", None
+    who, how, focus = "unknown", None, "security"
     args = []
     i = 0
     while i < len(argv):
         if argv[i] == "--from":
             who = argv[i + 1]; i += 2
+        elif argv[i] == "--focus":
+            focus = argv[i + 1]; i += 2
         elif argv[i] == "--notify":
             how = json.loads(argv[i + 1]); i += 2
         else:
@@ -83,14 +86,16 @@ def add(argv):
         # Or a package the operator put on this host (review.sh: localfile:).
         if not (URL.match(u) or re.match(r"^localfile:[A-Za-z0-9._-]+\.lgx$", u)):
             sys.exit(f"refused: not a package URL: {u}")
+    if focus not in FOCI:
+        sys.exit(f"refused: not a focus: {focus} ({', '.join(FOCI)})")
     for state in ("pending", "running"):
         for j in jobs(state):
-            if j["repo"] == repo and j["commit"] == commit:
+            if j["repo"] == repo and j["commit"] == commit and j.get("focus", "security") == focus:
                 print(f"already {state}: {j['id']}, {BASE}/{j['slug']}/live.html")
                 return
-    s = slug(repo, commit)
+    s = slug(repo, commit, focus)
     job = {"id": time.strftime("%Y%m%d-%H%M%S-") + uuid.uuid4().hex[:6], "repo": repo, "commit": commit,
-           "lgx": lgx, "from": who, "notify": how, "added": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+           "lgx": lgx, "focus": focus, "from": who, "notify": how, "added": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
            "state": "pending", "slug": s, "live": f"{BASE}/{s}/live.html", "report": f"{BASE}/{s}/"}
     save(job, "pending")
     pos = len(jobs("pending")) + len(jobs("running"))
@@ -106,7 +111,7 @@ def show(argv):
     for s in ("running", "pending", "done"):
         for n, j in enumerate(out[s], 1):
             extra = j.get("waiting", "") if s != "done" else j.get("result", "")
-            print(f"{s:8} {n:2}. {j['repo']} @ {j['commit'][:12]}  from {j.get('from','?')}  {extra}")
+            print(f"{s:8} {n:2}. {j['repo']} @ {j['commit'][:12]} [{j.get('focus','security')}]  from {j.get('from','?')}  {extra}")
 
 
 def balance():
@@ -132,9 +137,10 @@ def run():
         job = pending[0]
         b = balance()
         diem = (b.get("balances") or {}).get("DIEM")
-        if diem is None or diem < BUDGET + 0.05:
+        need = FOCI.get(job.get("focus", "security"), 1.0)
+        if diem is None or diem < need + 0.05:
             # Not enough for a whole review: wait for the day's allowance.
-            job["waiting"] = (f"waiting for the model budget ({diem:.2f} DIEM left, a review needs {BUDGET:.2f}; "
+            job["waiting"] = (f"waiting for the model budget ({diem:.2f} DIEM left, a {job.get('focus','security')} review needs {need:.2f}; "
                               f"it refills {b.get('next_epoch','at 00:00 UTC')})" if diem is not None
                               else f"waiting: the budget can't be read ({b.get('error','')})")
             save(job, "pending")
@@ -146,7 +152,9 @@ def run():
         l = job.get("lgx") or []
         args = [job["repo"], job["commit"]] + ([l] if isinstance(l, str) else l)
         with open(os.path.expanduser(f"~/runs-{job['slug']}.log"), "w") as log:
-            rc = subprocess.run(["bash", os.path.join(HERE, "review.sh")] + args, stdout=log, stderr=subprocess.STDOUT).returncode
+            env = dict(os.environ, REVIEW_FOCUS=job.get("focus", "security"))
+            rc = subprocess.run(["bash", os.path.join(HERE, "review.sh")] + args, stdout=log, stderr=subprocess.STDOUT,
+                                env=env).returncode
         try:
             r = json.load(open(f"/srv/reviews/{job['slug']}/review.json"))
             job["result"] = r.get("pill", "")

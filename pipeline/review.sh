@@ -43,7 +43,14 @@ if [[ "$REPO" != localdir:* ]] && ! url_ok "$REPO"; then echo "not a repository 
 INPUTS=/home/reviewer/inputs
 pkg_ok(){ url_ok "$1" || [[ "$1" =~ ^localfile:[A-Za-z0-9._-]+\.lgx$ && -f "$INPUTS/${1#localfile:}" ]]; }
 for u in "${@:3}"; do pkg_ok "$u" || { echo "not a package URL: $u"; exit 2; }; done
-slug=$(printf '%s-%s' "$(basename "$REPO" .git)" "${COMMIT:0:12}" | tr -c 'A-Za-z0-9._-' -)
+# What the review covers (inventory.py, focus/*.md): one focus a review, as
+# the submitter chooses; a full review gets more budget and time.
+FOCUS=${REVIEW_FOCUS:-security}
+case "$FOCUS" in security|p2p|ui) : "${REVIEW_BUDGET:=1.0}" "${REVIEW_MAX_MIN:=240}";;
+  full) : "${REVIEW_BUDGET:=1.8}" "${REVIEW_MAX_MIN:=360}";;
+  *) echo "not a focus: $FOCUS (security, p2p, ui, full)"; exit 2;; esac
+export REVIEW_FOCUS=$FOCUS REVIEW_BUDGET REVIEW_MAX_MIN
+slug=$(printf '%s-%s-%s' "$(basename "$REPO" .git)" "${COMMIT:0:12}" "$FOCUS" | tr -c 'A-Za-z0-9._-' -)
 # What the sandbox's user wrote belongs to a sub-uid here: removed inside
 # podman's user namespace, as the agent's archive does (shrooms ADR-072).
 RUN=/home/reviewer/runs/$slug; podman unshare rm -rf "$RUN"; mkdir -p "$RUN"/{src,checks,build,behaviour,media,logs}
@@ -142,6 +149,13 @@ if ls "$RUN"/lgx/*.lgx >/dev/null 2>&1; then
   REBUILD=$!
 fi
 
+# What the reviewer must cover, listed from the source before it starts.
+echo "$FOCUS" > "$RUN/logs/focus"
+if python3 "$HERE/inventory.py" "$RUN/src" "$FOCUS" > "$RUN/inventory.json" 2>"$RUN/logs/inventory.err"; then
+  live "## focus: $FOCUS: $(jq -r '"\(.files) files and \(.methods) exposed methods, \(.lines) lines, to cover"' "$RUN/inventory.json"); budget $REVIEW_BUDGET DIEM, $REVIEW_MAX_MIN min"
+else
+  live "## focus: $FOCUS: the inventory failed ($(head -c 200 "$RUN/logs/inventory.err"))"; echo '{"items":[]}' > "$RUN/inventory.json"
+fi
 live "## review: build, run and attack it in the sandbox (this is the work)"; log "sandboxed review"
 "$HERE/reviewer.sh" "$RUN" 2>&1 | tail -6 | tee -a "$RUN/logs/pipeline.log"
 python3 - "$RUN/behaviour/summary.json" <<'PY2' | while read l; do live "  $l"; done

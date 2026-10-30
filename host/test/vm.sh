@@ -64,14 +64,16 @@ verify() {
     # No model here: a dummy key gets the gateway started; nothing calls it.
     sudo -u reviewer bash -c "umask 077; [ -s ~/.pi/agent/.env ] || echo VENICE_INFERENCE_KEY=test-no-model > ~/.pi/agent/.env"
     sudo -iu reviewer bash -lc "REVIEW_TEST_PI=/home/reviewer/fake-pi.sh REVIEW_MAX_MIN=15 bash ~/pipeline/review.sh localdir:/home/reviewer/test-modules/leaky-build" | tail -4
-    R=/home/reviewer/runs/leaky-build-HEAD
+    R=/home/reviewer/runs/leaky-build-HEAD-security
     echo "--- the sandbox checked itself: $(sudo grep -c "^ok" $R/behaviour/sandbox-check.txt) ok, $(sudo grep -c FAIL $R/behaviour/sandbox-check.txt) failed"
     sudo grep FAIL $R/behaviour/sandbox-check.txt || true
     echo "--- what the stand-in saw"; sudo cat $R/probes/fake-pi.out
     echo "--- what the record shows"; sudo jq -c "{bait_sent_out,http_requests,reviewer_requests}" $R/behaviour/summary.json
-    echo "--- published: $(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1/leaky-build-HEAD/) report, $(ls /srv/reviews/leaky-build-HEAD/media/ 2>/dev/null | tr "\n" " ")"
+    echo "--- published: $(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1/leaky-build-HEAD-security/) report, $(ls /srv/reviews/leaky-build-HEAD-security/media/ 2>/dev/null | tr "\n" " ")"
     echo "--- the pipeline commit recorded: $(sudo cat $R/logs/pipeline-commit)"
-    echo "--- on Logos Storage: $(sudo jq -r ".cid // \"no\"" /srv/reviews/leaky-build-HEAD/storage.json 2>/dev/null)"
+    echo "--- the loop sent it back: $(sudo grep -c "^continue:" $R/probes/fake-pi.out) times; $(sudo grep "review-loop:" $R/logs/session.txt | tail -1)"
+    echo "--- coverage on the page: $(sudo jq -c ".focus, .coverage" /srv/reviews/leaky-build-HEAD-security/review.json | tr "\n" " ")"
+    echo "--- on Logos Storage: $(sudo jq -r ".cid // \"no\"" /srv/reviews/leaky-build-HEAD-security/storage.json 2>/dev/null)"
     echo "--- services: queue $(sudo -iu reviewer env XDG_RUNTIME_DIR=/run/user/$(id -u reviewer) systemctl --user is-active open-review-queue), agent $(sudo -iu reviewer env XDG_RUNTIME_DIR=/run/user/$(id -u reviewer) systemctl --user is-active shrooms-agent)"'
 }
 
@@ -80,10 +82,10 @@ verify_package() {
   # the official catalogue, and the install done before the reviewer starts.
   "${SSH[@]}" 'set -e
     sudo -iu reviewer bash -lc "REVIEW_TEST_PI=/home/reviewer/fake-pi.sh REVIEW_MAX_MIN=15 bash ~/pipeline/review.sh https://github.com/bristinWild/forumer b9907523bffc975723762f1766f483d576b677e3 https://github.com/bristinWild/forumer/releases/download/v0.2.5/forumer-0.2.5-linux-x86_64.lgx" | tail -3
-    R=/home/reviewer/runs/forumer-b9907523bffc
+    R=/home/reviewer/runs/forumer-b9907523bffc-security
     echo "--- installed before the reviewer started:"; sudo grep "^desk:" $R/logs/preinstall.txt
-    echo "--- the headline:"; sudo grep -o "Evaluated <b>[^<]*</b>[^<]*" /srv/reviews/forumer-b9907523bffc/index.html | head -1
-    echo "--- reviewed by open-review: $(sudo jq -r .open_review_commit /srv/reviews/forumer-b9907523bffc/review.json)"'
+    echo "--- the headline:"; sudo grep -o "Evaluated <b>[^<]*</b>[^<]*" /srv/reviews/forumer-b9907523bffc-security/index.html | head -1
+    echo "--- reviewed by open-review: $(sudo jq -r .open_review_commit /srv/reviews/forumer-b9907523bffc-security/review.json)"'
 }
 
 case "${1:-}" in

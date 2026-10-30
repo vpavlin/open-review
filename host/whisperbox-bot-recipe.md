@@ -128,6 +128,7 @@ Title "Submit a Basecamp module for open-review", not anonymous, no address list
   {"id":"repo","type":"shortText","text":"Repository URL (https://github.com/owner/name)","required":true},
   {"id":"commit","type":"shortText","text":"Commit (40-character SHA)","required":true},
   {"id":"lgx","type":"shortText","text":"Published .lgx URL (optional: review the package you ship, too)","required":false},
+  {"id":"focus","type":"shortText","text":"Focus: security, p2p, ui or full (optional, default security; full costs about two reviews)","required":false},
   {"id":"module","type":"shortText","text":"Module name, if the repo has several (optional)","required":false},
   {"id":"note","type":"textarea","text":"Anything the reviewer should know (optional)","required":false}
  ]}

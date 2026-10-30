@@ -14,7 +14,8 @@
 #   desk shot <name>           screenshot to /run/media/NN-<name>.png
 #   desk log [n]               the last n lines of Basecamp's log (default 40)
 #   desk stop                  stop Basecamp and finalise the video
-#   desk time                  how much of the review's time is used and left
+#   desk time                  how much of the review's time and budget is used and left
+#   desk coverage              how much of /run/inventory.json is covered, and what is left
 #
 # Screenshots and the video are published with the report; take a shot at
 # every step that shows something, named for what it shows.
@@ -80,18 +81,14 @@ import json
 try:
     d=json.load(open("/run/logs/spend.json"))
     s,t=d["spent"],d["testing"]
-    print(f"[budget] {s:.2f} of {t:.2f} DIEM for testing used" + ("; STOP TESTING and write the report now" if s>=0.85*t else ""))
+    print(f"[budget] {s:.2f} of {t:.2f} DIEM for testing used, {t-s:.2f} left")
 except Exception: pass
 PY
   read -r t0 max < /run/logs/clock 2>/dev/null || return 0
-  # The report starts at about three quarters of the time (minute 110 of
-  # 150); "the limit less 40" was below zero for a short review.
-  used=$(( ($(date +%s)-t0)/60 )); left=$(( max-used )); by=$(( max*11/15 ))
-  if [ "$used" -ge "$by" ]; then
-    echo "[clock] ${used} of ${max} min used, ${left} left: STOP TESTING and write the report now"
-  else
-    echo "[clock] ${used} of ${max} min used, ${left} left; start the report by minute ${by}"
-  fi
+  # Testing goes on to the limit; the write-up is a pass of its own after
+  # it, so the reviewer no longer stops early to write (2026-10-30).
+  used=$(( ($(date +%s)-t0)/60 )); left=$(( max-used ))
+  echo "[clock] ${used} of ${max} min used, ${left} left; keep report.md and coverage.json current"
 }
 nextshot() { n=$(ls "$M"/*.png 2>/dev/null | wc -l); printf '%02d' $((n+1)); }
 ocr() {  # one line per text line on screen: "x,y  text" (x,y = its centre)
@@ -113,6 +110,7 @@ ocr() {  # one line per text line on screen: "x,y  text" (x,y = its centre)
 [ "${1:-}" != time ] && [ "${1:-}" != _install ] && clock
 case "${1:-}" in
   time) clock ;;
+  coverage) python3 /pipeline/coverage.py /run/inventory.json /run/src/coverage.json --missing "${2:-25}" ;;
   start)
     # In a review the screen and its recorder are root's and already running;
     # alone (a test), desk brings its own.

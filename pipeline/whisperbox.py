@@ -72,13 +72,20 @@ def queue_counts():
 def check(answers):
     a = {x.get("questionId"): str(x.get("value", "")).strip() for x in answers if isinstance(x, dict)}
     repo, commit, lgx = a.get("repo", ""), a.get("commit", "").lower(), a.get("lgx", "")
+    # The form's optional "focus" question (a choice, or typed): what the
+    # review covers. "full" costs about two reviews' budget.
+    focus = (a.get("focus", "") or "security").lower().split()[0]
+    focus = {"peer-to-peer": "p2p", "p2p": "p2p", "network": "p2p", "ui": "ui", "interface": "ui",
+             "full": "full", "everything": "full", "security": "security"}.get(focus, "")
     if not REPO.match(repo):
         return None, "the repository must be https://github.com/, gitlab.com/ or codeberg.org/ owner/name"
     if not COMMIT.match(commit):
         return None, "the commit must be the full 40-character SHA"
     if lgx and not LGX.match(lgx):
         return None, "the package must be an https URL ending in .lgx"
-    return (repo.rstrip("/"), commit, lgx), None
+    if not focus:
+        return None, "the focus must be security, p2p, ui or full"
+    return (repo.rstrip("/"), commit, lgx, focus), None
 
 
 def poll():
@@ -106,10 +113,10 @@ def poll():
                                       "or answer from WhisperBox 0.5.0" if who == "unsigned"
                                       else f"you already have {len(mine)} reviews waiting")
             if sub:
-                repo, commit, lgx = sub
+                repo, commit, lgx, focus = sub
                 notify = json.dumps({"kind": "whisperbox", "form": form, "confirmation": cid})
                 res = subprocess.run([sys.executable, os.path.join(HERE, "queue.py"), "add", repo, commit]
-                                     + ([lgx] if lgx else []) + ["--from", f"whisperbox:{who}", "--notify", notify],
+                                     + ([lgx] if lgx else []) + ["--focus", focus, "--from", f"whisperbox:{who}", "--notify", notify],
                                      capture_output=True, text=True)
                 s[cid] = {"at": time.time(), "result": (res.stdout or res.stderr).strip()[:300]}
                 if res.returncode == 0 and r.get("respondent"):
