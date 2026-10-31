@@ -18,6 +18,11 @@ if [ -z "${REVIEW_SNAPSHOT:-}" ]; then
   exec 9>"$STATE/lock"
   # Exit 75 (EX_TEMPFAIL): the queue puts the job back rather than closing it.
   flock -n 9 || { echo "a review is already running (review-stop.sh ends it)"; exit 75; }
+  # podman, and the slirp4netns it starts for every rootless container,
+  # must not inherit the lock: slirp4netns outlived a stopped review holding
+  # it, and killing it to free the lock took the network from every rootless
+  # container after (2026-10-30). Exported, so reviewer.sh's podman too.
+  podman() { command podman "$@" 9>&-; }; export -f podman
   # Whatever an earlier, interrupted review left: no review holds the lock now.
   for c in $(podman ps -q --filter ancestor=localhost/open-reviewer:latest); do podman kill "$c" >/dev/null; done
   SNAP=$STATE/pipeline-$(date -u +%Y%m%d-%H%M%S)
@@ -79,6 +84,11 @@ echo "$REPO" > "$RUN/logs/repo"
 # The commit asked for, or nothing: a checkout that failed left the clone at
 # its default branch, and a review of WhisperBox "@ 302a134…" started on
 # main's 62a5336 instead (2026-10-29, a mistyped full hash).
+# No clone at all is the network's fault, not the submission's: the queue
+# tries the job again later (exit 75).
+if [[ "$REPO" != localdir:* ]] && [ ! -s "$RUN/logs/commit" ]; then
+  live "the clone failed (network?): will be tried again"; log "clone failed"; exit 75
+fi
 if [ "$COMMIT" != HEAD ] && [[ "$REPO" != localdir:* ]] && [[ "$(cat "$RUN/logs/commit" 2>/dev/null)" != "$COMMIT"* ]]; then
   live "the commit $COMMIT isn't in $REPO: stopped"; log "commit $COMMIT not found (clone is at $(cat "$RUN/logs/commit" 2>/dev/null))"; exit 2
 fi

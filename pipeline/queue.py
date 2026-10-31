@@ -168,11 +168,13 @@ def run():
                 env["REVIEW_MAX_MIN"] = str(job["max_min"])
             rc = subprocess.run(["bash", os.path.join(HERE, "review.sh")] + args, stdout=log, stderr=subprocess.STDOUT,
                                 env=env).returncode
-        if rc == 75:
-            # Another review holds the lock (review.sh): not this job's
-            # failure. Back to the front, and wait.
+        if rc == 75 and job.get("retries", 0) < 6:
+            # Not this job's failure (review.sh): another review holds the
+            # lock, or the clone found no network. Back to the front, and
+            # try again in a while, a few times.
             job["state"] = "pending"; job.pop("started", None)
-            job["waiting"] = "waiting: another review is running"
+            job["retries"] = job.get("retries", 0) + 1
+            job["waiting"] = f"waiting: another review is running, or no network (try {job['retries']} of 6)"
             save(job, "pending")
             time.sleep(300); continue
         try:
