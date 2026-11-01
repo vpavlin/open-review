@@ -27,7 +27,10 @@ Description=open-review: a Logos Storage node holding the published reviews
 After=network-online.target
 
 [Service]
-ExecStart=/opt/logos-storage/logos-storage --data-dir=%h/storage --network=logos.test --listen-port=8070 --api-port=8099 --nat=$nat
+# --block-ttl: 100 years. The default is 30 days, after which the node
+# deletes a review's archive; and 0 does not disable expiry, it expires a
+# block at once (repostore/store.nim; found by jimmy-crib, 2026-11-01).
+ExecStart=/opt/logos-storage/logos-storage --data-dir=%h/storage --network=logos.test --listen-port=8070 --api-port=8099 --nat=$nat --block-ttl=3153600000
 Restart=always
 RestartSec=30
 
