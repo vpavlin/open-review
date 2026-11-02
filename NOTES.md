@@ -326,3 +326,17 @@ A running log: newest last. What was done, why, and what was found.
   **fixed severity scale**. Full: 1.8 DIEM, 6 h; others 1.0 DIEM, 4 h. Slugs
   now end in the focus. Tested on the VM with the stand-in (loop, coverage on
   the page, sandbox 31/31).
+
+## 2026-11-02: the disk filled with debug logs; WhisperBox 0.5.3 re-review
+
+- **The review host's disk was full** (193 of 193 GB): /var/log/syslog had
+  grown to 175 GB in a day. The WhisperBox bot (wb-bot.service) logs its
+  delivery module at debug level, and the DHT's liveness probes alone were
+  some ten thousand lines a second, copied from the journal into syslog.
+  Truncated it (164 GB free), and `host/60-log-limits.sh`: rsyslog drops
+  logosctl's `DBG` lines (the journal keeps them, capped), syslog rotates at
+  1 GB, logrotate runs hourly. Found when a package upload for the next job
+  failed; any review would have failed the same way.
+- **WhisperBox 0.5.3** (5727d23, SDK 2ec5634) queued for atlas/whisperbox, focus
+  full, with its merged packages as localfile inputs (wb053-*): the fixes for
+  the 0.5.2 report. Live: https://or.vpavlin.xyz/whisperbox-logos-5727d23c4fad-full/live.html
